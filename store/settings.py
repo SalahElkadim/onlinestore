@@ -24,13 +24,8 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production'
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 # Allowed hosts - على Railway هيتضاف تلقائياً
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1','onlinestore-production-d7b2.up.railway.app').split(',')
 
-# في حالة Railway، أضف دومين Railway
-if os.getenv('RAILWAY_ENVIRONMENT'):
-    RAILWAY_STATIC_URL = os.getenv('RAILWAY_STATIC_URL', '')
-    if RAILWAY_STATIC_URL:
-        ALLOWED_HOSTS.append(RAILWAY_STATIC_URL.replace('https://', '').replace('http://', ''))
 
 # Security settings للـ production
 if not DEBUG:
@@ -40,6 +35,7 @@ if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # ============================================================
 # APPLICATION DEFINITION
@@ -109,7 +105,8 @@ REST_FRAMEWORK = {
 
     # Permissions
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',
+
     ],
 
     # Filtering
