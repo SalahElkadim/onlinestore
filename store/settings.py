@@ -47,8 +47,8 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'cloudinary_storage',          # لازم قبل staticfiles
     'django.contrib.staticfiles',
+    'cloudinary_storage',          # لازم قبل staticfiles
     'dashboard', 
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
