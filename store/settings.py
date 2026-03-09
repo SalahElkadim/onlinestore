@@ -250,24 +250,12 @@ WSGI_APPLICATION = 'store.wsgi.application'
 # DATABASE
 # ============================================================
 
-# Default to SQLite for local development
-    # Production: use PostgreSQL from Railway
-import dj_database_url
-
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-if DATABASE_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)
-    }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-
+DATABASES = {
+    "default": dj_database_url.parse(
+        "postgresql://postgres:MGDTMrfSHWndMvmFuyLWACqpfQxQMFvF@shortline.proxy.rlwy.net:20389/railway",
+        conn_max_age=600
+    )
+}
 
 # ============================================================
 # PASSWORD VALIDATION
