@@ -225,13 +225,12 @@ class ProductVariant(models.Model):
     A specific sellable combination: e.g., Red + XL.
     Each variant has its own stock, price override (optional), and SKU.
     """
-    product         = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
+    product          = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
     attribute_values = models.ManyToManyField(AttributeValue, related_name='variants')
-    price_override  = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    stock           = models.PositiveIntegerField(default=0)
-    sku             = models.CharField(max_length=100, unique=True, blank=True, null=True)
-    image           = models.ImageField(upload_to='variants/', blank=True, null=True)
-    is_active       = models.BooleanField(default=True)
+    price_override   = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    sku              = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    image            = models.ImageField(upload_to='variants/', blank=True, null=True)
+    is_active        = models.BooleanField(default=True)
 
     def __str__(self):
         attrs = ", ".join(str(av) for av in self.attribute_values.all())
@@ -242,8 +241,13 @@ class ProductVariant(models.Model):
         return self.price_override if self.price_override else self.product.effective_price
 
     @property
+    def stock(self):
+        from django.db.models import Sum
+        result = self.warehouse_stocks.aggregate(total=Sum('quantity'))['total']
+        return result or 0
+
+    @property
     def is_low_stock(self):
-        """Threshold: 5 units."""
         return 0 < self.stock <= 5
 
     @property
