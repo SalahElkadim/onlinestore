@@ -294,21 +294,41 @@ class DashboardStatsView(StandardResponseMixin, APIView):
         }
         return self.success(data)
 
-
 class InventoryAlertsView(StandardResponseMixin, APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request):
-        alert_type = request.query_params.get('type', 'all')  # all | low | out
+        alert_type = request.query_params.get('type', 'all')
 
-        qs = ProductVariant.objects.select_related('product').prefetch_related('attribute_values')
+        from django.db.models import Sum, OuterRef, Subquery, IntegerField
+        from django.db.models.functions import Coalesce
+        from erp.models import WarehouseStock  # أو أي اسم الـ app بتاعك
+
+        # حساب الـ stock الحقيقي من WarehouseStock
+        stock_subquery = WarehouseStock.objects.filter(
+            variant=OuterRef('pk')
+        ).values('variant').annotate(
+            total=Sum('quantity')
+        ).values('total')
+
+        qs = (
+            ProductVariant.objects
+            .select_related('product')
+            .prefetch_related('attribute_values')
+            .annotate(
+                real_stock=Coalesce(
+                    Subquery(stock_subquery, output_field=IntegerField()),
+                    0
+                )
+            )
+        )
 
         if alert_type == 'low':
-            qs = qs.filter(stock__gt=0, stock__lte=5)
+            qs = qs.filter(real_stock__gt=0, real_stock__lte=5)
         elif alert_type == 'out':
-            qs = qs.filter(stock=0)
-        else:
-            qs = qs.filter(stock__lte=5)
+            qs = qs.filter(real_stock=0)
+        else:  # all
+            qs = qs.filter(real_stock__lte=5)
 
         serializer = InventoryAlertSerializer(qs, many=True)
         return self.success(serializer.data)

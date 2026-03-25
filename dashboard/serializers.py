@@ -763,8 +763,9 @@ class InventoryAlertSerializer(serializers.ModelSerializer):
         return ", ".join(av.value for av in obj.attribute_values.all())
 
     def get_status(self, obj):
-        if obj.is_out_of_stock:
+        stock = getattr(obj, 'real_stock', obj.stock)  # fallback للـ property
+        if stock == 0:
             return 'out_of_stock'
-        if obj.is_low_stock:
+        if stock <= 5:
             return 'low_stock'
         return 'ok'
