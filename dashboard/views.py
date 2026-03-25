@@ -52,8 +52,7 @@ from django.db.models import Sum, Count, Avg, Q, F, OuterRef, Subquery, IntegerF
 from django.db.models.functions import Coalesce, TruncDate, TruncMonth
 from erp.models import WarehouseStock
 User = get_user_model()
-
-
+from erp.models import Warehouse
 # ============================================================
 # MIXINS
 # ============================================================
@@ -594,18 +593,29 @@ class ProductVariantDetailView(StandardResponseMixin, RetrieveUpdateDestroyAPIVi
             product_id=self.kwargs['pk']
         )
 
-
 class UpdateVariantStockView(StandardResponseMixin, APIView):
     permission_classes = [IsAdminOrStaff]
 
     def patch(self, request, pk, variant_pk):
-        variant  = get_object_or_404(ProductVariant, pk=variant_pk, product_id=pk)
+        variant = get_object_or_404(ProductVariant, pk=variant_pk, product_id=pk)
         new_stock = request.data.get('stock')
         if new_stock is None or int(new_stock) < 0:
             return self.error('Provide a valid non-negative stock value.')
-        old_stock    = variant.stock
-        variant.stock = int(new_stock)
-        variant.save()
+
+        old_stock = variant.stock
+        new_stock = int(new_stock)
+
+        # ✅ حدّث WarehouseStock مباشرة
+        warehouse = Warehouse.objects.filter(is_default=True).first()
+        if warehouse:
+            stock_obj, created = WarehouseStock.objects.get_or_create(
+                variant=variant,
+                warehouse=warehouse,
+                defaults={'quantity': new_stock}
+            )
+            if not created:
+                stock_obj.quantity = new_stock
+                stock_obj.save()
 
         # Notify if low or out
         if variant.is_out_of_stock:
@@ -615,9 +625,6 @@ class UpdateVariantStockView(StandardResponseMixin, APIView):
 
         log_activity(request, 'update', 'ProductVariant', variant)
         return self.success({'old_stock': old_stock, 'new_stock': variant.stock}, 'Stock updated.')
-
-
-# ── Attributes ────────────────────────────────────────────────
 
 # ── Attributes ────────────────────────────────────────────────
 
