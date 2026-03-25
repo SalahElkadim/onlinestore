@@ -193,10 +193,11 @@ class SalesOrderItemListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request, order_pk):
-        get_object_or_404(SalesOrder, pk=order_pk)
+        order = get_object_or_404(SalesOrder, pk=order_pk)
         serializer = SalesOrderItemSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(sales_order_id=order_pk)
+            order.calculate_totals()  # ← السطر ده بس اللي اتضاف
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

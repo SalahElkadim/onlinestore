@@ -110,6 +110,8 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         read_only_fields = ['order_number', 'subtotal', 'total', 'created_at', 'updated_at']
 
 
+from decimal import Decimal
+
 class SalesOrderWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesOrder
@@ -120,6 +122,24 @@ class SalesOrderWriteSerializer(serializers.ModelSerializer):
             'payment_method', 'payment_status', 'amount_paid',
             'reference_code', 'internal_notes', 'created_by',
         ]
+
+    def _recalc_total(self, order):
+        order.total = (
+            Decimal(str(order.subtotal or 0))
+            - Decimal(str(order.discount_amount or 0))
+            + Decimal(str(order.tax_amount or 0))
+            + Decimal(str(order.shipping_cost or 0))
+        )
+        order.save(update_fields=['total'])
+        return order
+
+    def create(self, validated_data):
+        order = super().create(validated_data)
+        return self._recalc_total(order)
+
+    def update(self, instance, validated_data):
+        order = super().update(instance, validated_data)
+        return self._recalc_total(order)
 
 
 # ============================================================
