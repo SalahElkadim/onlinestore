@@ -48,8 +48,9 @@ from .serializers import (
 )
 from .permissions import IsAdminOrStaff, IsAdminOnly, HasModulePermission
 from .utils import log_activity, create_notification, get_client_ip
-from erp.models import WarehouseStock  # Ensure this is the correct app and model path
-
+from django.db.models import Sum, Count, Avg, Q, F, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce, TruncDate, TruncMonth
+from erp.models import WarehouseStock
 User = get_user_model()
 
 
@@ -270,9 +271,6 @@ class DashboardStatsView(StandardResponseMixin, APIView):
         } for c in top_customers_qs]
 
         # ── Low Stock ──────────────────────────────────────────
-        from django.db.models import Sum, OuterRef, Subquery, IntegerField
-        from django.db.models.functions import Coalesce
-
         stock_subquery = WarehouseStock.objects.filter(
             variant=OuterRef('pk')
         ).values('variant').annotate(
