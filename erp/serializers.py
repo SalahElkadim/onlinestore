@@ -115,13 +115,14 @@ from decimal import Decimal
 class SalesOrderWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesOrder
-        fields = [
+        fields = ['id',
             'source', 'status', 'online_order', 'customer',
             'customer_name', 'customer_phone', 'customer_email', 'customer_note',
             'discount_amount', 'tax_amount', 'shipping_cost',
             'payment_method', 'payment_status', 'amount_paid',
             'reference_code', 'internal_notes', 'created_by',
         ]
+        read_only_fields = ['id']
 
     def _recalc_total(self, order):
         order.total = (
