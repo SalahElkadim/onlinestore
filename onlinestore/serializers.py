@@ -578,8 +578,10 @@ class CheckoutSerializer(serializers.Serializer):
 
             # خصم من الـ stock
             if variant:
-                variant.stock -= item['quantity']
-                variant.save()
+                from django.db.models import F
+                variant.warehouse_stocks.update(
+                    quantity=F('quantity') - item['quantity']
+                )
 
         # ── Payment Processor ──────────────────────────────────
         processor = PaymentProcessorFactory.get(validated_data['payment_method'])
