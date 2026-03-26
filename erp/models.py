@@ -849,9 +849,12 @@ class Employee(models.Model):
         CONTRACT  = 'contract',  'Contract'
         FREELANCE = 'freelance', 'Freelance'
 
-    user            = models.OneToOneField(
-        'dashboard.User', on_delete=models.CASCADE, related_name='employee_profile'
+    user = models.OneToOneField(
+        'dashboard.User', on_delete=models.CASCADE,
+        null=True, blank=True,          # ← اختياري دلوقتي
+        related_name='employee_profile'
     )
+    name       = models.CharField(max_length=200)   # ← جديد
     department      = models.ForeignKey(
         Department, on_delete=models.SET_NULL, null=True, related_name='employees'
     )

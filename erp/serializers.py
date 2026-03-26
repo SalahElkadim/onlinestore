@@ -475,43 +475,50 @@ class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = [
-            'id', 'user', 'full_name', 'department', 'department_name',
+            'id', 'name', 'full_name', 'user', 'department', 'department_name',
             'job_title', 'employment_type', 'salary', 'hire_date',
             'national_id', 'emergency_contact', 'is_active', 'created_at',
         ]
         read_only_fields = ['created_at']
 
     def get_full_name(self, obj):
-        return obj.user.get_full_name()
+        # لو مربوط بيوزر يجيب اسمه، غير كدا يرجع الـ name المكتوب
+        if obj.user_id:
+            return obj.user.get_full_name() or obj.name
+        return obj.name
 
 
 class EmployeeWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = [
-            'user', 'department', 'job_title', 'employment_type',
+            'name', 'user', 'department', 'job_title', 'employment_type',
             'salary', 'hire_date', 'national_id', 'emergency_contact', 'is_active',
         ]
+        extra_kwargs = {'user': {'required': False}}  # ← اختياري
 
 
+# ضيف employee_name للتلات serializers دول عشان التابات التانية تعرض الاسم
 class AttendanceSerializer(serializers.ModelSerializer):
-    hours_worked = serializers.ReadOnlyField()
+    hours_worked  = serializers.ReadOnlyField()
+    employee_name = serializers.CharField(source='employee.name', read_only=True)  # ← جديد
 
     class Meta:
         model = Attendance
         fields = [
-            'id', 'employee', 'date', 'check_in',
+            'id', 'employee', 'employee_name', 'date', 'check_in',
             'check_out', 'status', 'notes', 'hours_worked',
         ]
 
 
 class LeaveRequestSerializer(serializers.ModelSerializer):
-    days_count = serializers.ReadOnlyField()
+    days_count    = serializers.ReadOnlyField()
+    employee_name = serializers.CharField(source='employee.name', read_only=True)  # ← جديد
 
     class Meta:
         model = LeaveRequest
         fields = [
-            'id', 'employee', 'type', 'start_date', 'end_date',
+            'id', 'employee', 'employee_name', 'type', 'start_date', 'end_date',
             'reason', 'status', 'approved_by', 'days_count', 'created_at',
         ]
         read_only_fields = ['created_at']
@@ -520,11 +527,12 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
 class SalesTargetSerializer(serializers.ModelSerializer):
     achieved_amount        = serializers.ReadOnlyField()
     achievement_percentage = serializers.ReadOnlyField()
+    employee_name          = serializers.CharField(source='employee.name', read_only=True)  # ← جديد
 
     class Meta:
         model = SalesTarget
         fields = [
-            'id', 'employee', 'period_start', 'period_end',
+            'id', 'employee', 'employee_name', 'period_start', 'period_end',
             'target_amount', 'achieved_amount', 'achievement_percentage',
             'notes', 'created_at',
         ]
