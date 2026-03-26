@@ -1,4 +1,4 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -46,32 +46,42 @@ def deduct_stock_on_sale(sender, instance, created, **kwargs):
     )
 
     _check_stock_alert(variant, ws.quantity)
-
-    # ✅ بعد كل item يتضاف، احسب الـ total من جديد وحدّث الـ Revenue
     _recalc_and_sync_revenue(instance.sales_order)
 
 
 # ─────────────────────────────────────────────
-#  2. إنشاء/تحديث Revenue لما الأوردر يتأكد
-#     أو لما الـ total يتغير
+#  2. ✅ FIX: إنشاء/تحديث Revenue لأي status
+#     مش بس confirmed
 # ─────────────────────────────────────────────
 @receiver(post_save, sender='erp.SalesOrder')
-def create_revenue_on_confirmed(sender, instance, **kwargs):
+def sync_revenue_on_order_save(sender, instance, **kwargs):
     from erp.models import Revenue
 
-    if instance.status == 'confirmed':
-        # ✅ اجلب الـ total من الـ DB مش من الـ instance
-        # عشان ممكن يكون stale في وقت الـ signal
+    # ✅ الحالات اللي مفروض ينشأ ليها إيراد
+    REVENUE_STATUSES = {'confirmed', 'processing', 'shipped', 'delivered'}
+    # ✅ الحالات اللي المفروض نحذف/نلغي إيرادها
+    NO_REVENUE_STATUSES = {'cancelled', 'returned', 'draft'}
+
+    if instance.status in NO_REVENUE_STATUSES:
+        # لو الأوردر اتلغى أو مسودة، احذف الإيراد لو موجود
+        Revenue.objects.filter(sales_order=instance).delete()
+        return
+
+    if instance.status in REVENUE_STATUSES:
         from erp.models import SalesOrder
-        fresh_total = SalesOrder.objects.filter(pk=instance.pk).values_list('total', flat=True).first()
-        
+        # اجلب الـ total الطازج من الـ DB
+        fresh_total = SalesOrder.objects.filter(
+            pk=instance.pk
+        ).values_list('total', flat=True).first()
+
         Revenue.objects.update_or_create(
             sales_order=instance,
             defaults={
-                'source': Revenue.Source.SALE,
+                'source': 'sale',
                 'amount': fresh_total or instance.total,
-                'date': instance.created_at.date(),
-                'description': f"Sale: {instance.order_number}",
+                'date': instance.created_at.date() if instance.created_at else timezone.now().date(),
+                'description': f"بيع: {instance.order_number} — {instance.customer_name}",
+                'currency': 'EGP',
             }
         )
 
@@ -81,9 +91,9 @@ def create_revenue_on_confirmed(sender, instance, **kwargs):
         except Exception:
             pass
 
+
 # ─────────────────────────────────────────────
-#  Helper: احسب totals من الـ items وحدّث الـ Revenue
-#  بيتاستدعى بعد كل SalesOrderItem يتضاف
+#  Helper: احسب totals من الـ items وحدّث Revenue
 # ─────────────────────────────────────────────
 def _recalc_and_sync_revenue(order):
     from erp.models import Revenue
@@ -97,24 +107,27 @@ def _recalc_and_sync_revenue(order):
         + Decimal(str(order.shipping_cost or 0))
     )
 
+    # ✅ حدّث الـ totals في الـ order
     type(order).objects.filter(pk=order.pk).update(
         subtotal=subtotal,
         total=total,
     )
 
-    # ✅ لو الأوردر confirmed، update_or_create مش بس update
-    if order.status == 'confirmed':
+    REVENUE_STATUSES = {'confirmed', 'processing', 'shipped', 'delivered'}
+
+    if order.status in REVENUE_STATUSES:
         Revenue.objects.update_or_create(
             sales_order=order,
             defaults={
-                'source': Revenue.Source.SALE,
+                'source': 'sale',
                 'amount': total,
-                'date': order.created_at.date(),
-                'description': f"Sale: {order.order_number}",
+                'date': order.created_at.date() if order.created_at else timezone.now().date(),
+                'description': f"بيع: {order.order_number} — {order.customer_name}",
+                'currency': 'EGP',
             }
         )
     else:
-        # لو مش confirmed، حدّث اللي موجود بس
+        # لو مش في الـ statuses دي، حدّث المبلغ بس لو موجود
         Revenue.objects.filter(
             sales_order=order,
             source='sale',
@@ -208,10 +221,10 @@ def restock_on_return_completed(sender, instance, **kwargs):
 
     if instance.refund_amount > 0:
         Revenue.objects.create(
-            source=Revenue.Source.OTHER,
+            source='other',
             amount=-instance.refund_amount,
             date=timezone.now().date(),
-            description=f"Refund for Return #{instance.pk}",
+            description=f"استرداد للمرتجع #{instance.pk}",
         )
 
 
@@ -244,16 +257,18 @@ def _check_stock_alert(variant, current_stock):
 
         Notification.objects.create(
             type=ntype,
-            title=f"{'Out of Stock' if current_stock == 0 else 'Low Stock'}: {variant.product.name}",
-            message=f"Variant: {variant} | Remaining: {current_stock} units",
+            title=f"{'نفد المخزون' if current_stock == 0 else 'مخزون منخفض'}: {variant.product.name}",
+            message=f"المتغير: {variant} | المتبقي: {current_stock} وحدة",
             link=f"/erp/inventory/{variant.pk}/",
         )
 
         alert.last_triggered_at = timezone.now()
         alert.save(update_fields=['last_triggered_at'])
 
-from django.db.models.signals import post_save, post_delete
 
+# ─────────────────────────────────────────────
+#  6. إعادة حساب total للـ PurchaseOrder
+# ─────────────────────────────────────────────
 @receiver(post_save, sender='erp.PurchaseOrderItem')
 @receiver(post_delete, sender='erp.PurchaseOrderItem')
 def recalc_purchase_order_total(sender, instance, **kwargs):
@@ -264,37 +279,30 @@ def recalc_purchase_order_total(sender, instance, **kwargs):
     )
     type(po).objects.filter(pk=po.pk).update(total_cost=total)
 
+
 # ─────────────────────────────────────────────
 #  7. تحديث FinancialSummary تلقائياً
-#     عند إنشاء/تعديل/حذف Revenue أو Expense
 # ─────────────────────────────────────────────
-from django.db.models.signals import post_save, post_delete
 from django.db.models import Sum
 
+
 def _recalc_financial_summary(date):
-    """
-    يحسب FinancialSummary ليوم معين من Revenue و Expense الحالية في الـ DB.
-    """
     from erp.models import Revenue, Expense, SalesOrder, FinancialSummary
     from decimal import Decimal
 
-    # إجمالي الإيرادات في اليوم ده
     total_revenue = Revenue.objects.filter(date=date).aggregate(
         total=Sum('amount')
     )['total'] or Decimal('0')
 
-    # إجمالي المصروفات في اليوم ده
     total_expenses = Expense.objects.filter(date=date).aggregate(
         total=Sum('amount')
     )['total'] or Decimal('0')
 
-    # عدد الأوردرات المؤكدة في اليوم ده
     orders_count = SalesOrder.objects.filter(
         created_at__date=date,
-        status='confirmed'
+        status__in=['confirmed', 'processing', 'shipped', 'delivered']
     ).count()
 
-    # المرتجعات في اليوم ده
     from erp.models import ReturnRequest
     returned_amount = ReturnRequest.objects.filter(
         created_at__date=date,
