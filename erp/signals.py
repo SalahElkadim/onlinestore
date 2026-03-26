@@ -47,20 +47,26 @@ def deduct_stock_on_sale(sender, instance, created, **kwargs):
 
     _check_stock_alert(variant, ws.quantity)
 
+    # ✅ بعد كل item يتضاف، احسب الـ total من جديد وحدّث الـ Revenue
+    _recalc_and_sync_revenue(instance.sales_order)
+
 
 # ─────────────────────────────────────────────
-#  2. إنشاء Revenue لما الأوردر يتأكد
+#  2. إنشاء/تحديث Revenue لما الأوردر يتأكد
+#     أو لما الـ total يتغير
 # ─────────────────────────────────────────────
 @receiver(post_save, sender='erp.SalesOrder')
-def create_revenue_on_delivery(sender, instance, **kwargs):
+def create_revenue_on_confirmed(sender, instance, **kwargs):
     from erp.models import Revenue
 
     if instance.status == 'confirmed':
-        Revenue.objects.get_or_create(
+        # ✅ update_or_create بدل get_or_create
+        # عشان لو Revenue موجودة بـ amount=0 تتحدث بالـ total الصح
+        Revenue.objects.update_or_create(
             sales_order=instance,
             defaults={
                 'source': Revenue.Source.SALE,
-                'amount': instance.total,
+                'amount': instance.total,          # ✅ دايماً بيتحدث بآخر total
                 'date': instance.created_at.date(),
                 'description': f"Sale: {instance.order_number}",
             }
@@ -71,6 +77,41 @@ def create_revenue_on_delivery(sender, instance, **kwargs):
             instance.customer.update_stats()
         except Exception:
             pass
+
+
+# ─────────────────────────────────────────────
+#  Helper: احسب totals من الـ items وحدّث الـ Revenue
+#  بيتاستدعى بعد كل SalesOrderItem يتضاف
+# ─────────────────────────────────────────────
+def _recalc_and_sync_revenue(order):
+    """
+    يحسب subtotal وtotal من الـ items الحالية،
+    يحفظهم في الأوردر، ثم يحدّث الـ Revenue المرتبطة.
+    بيستخدم update_fields عشان ميطلقش الـ signal تاني (loop).
+    """
+    from erp.models import Revenue
+    from decimal import Decimal
+
+    # احسب الـ subtotal من الـ items
+    subtotal = sum(item.total_price for item in order.items.all())
+    total = (
+        Decimal(str(subtotal))
+        - Decimal(str(order.discount_amount or 0))
+        + Decimal(str(order.tax_amount or 0))
+        + Decimal(str(order.shipping_cost or 0))
+    )
+
+    # حدّث الأوردر بدون ما نطلق الـ post_save signal تاني
+    type(order).objects.filter(pk=order.pk).update(
+        subtotal=subtotal,
+        total=total,
+    )
+
+    # حدّث الـ Revenue المرتبطة لو موجودة
+    Revenue.objects.filter(
+        sales_order=order,
+        source='sale',
+    ).update(amount=total)
 
 
 # ─────────────────────────────────────────────

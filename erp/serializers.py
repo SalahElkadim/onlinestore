@@ -73,7 +73,7 @@ class QuotationWriteSerializer(serializers.ModelSerializer):
     """للإنشاء والتعديل — بدون items (بيتضافوا منفصلين)."""
     class Meta:
         model = Quotation
-        fields = [
+        fields = ['id',
             'customer_name', 'customer_phone', 'customer_email',
             'status', 'valid_until', 'notes', 'created_by', 'converted_to',
         ]
@@ -111,37 +111,53 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 
 
 from decimal import Decimal
-
 class SalesOrderWriteSerializer(serializers.ModelSerializer):
+    # ✅ اقبل subtotal وtotal من الـ frontend كـ fallback
+    # الـ signal هيحسبهم تاني بعد إضافة الـ items، بس لو جم من frontend خليهم
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    total    = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+ 
     class Meta:
         model = SalesOrder
-        fields = ['id',
+        fields = [
+            'id',
             'source', 'status', 'online_order', 'customer',
             'customer_name', 'customer_phone', 'customer_email', 'customer_note',
+            'subtotal', 'total',                          # ✅ مضافين
             'discount_amount', 'tax_amount', 'shipping_cost',
             'payment_method', 'payment_status', 'amount_paid',
             'reference_code', 'internal_notes', 'created_by',
         ]
         read_only_fields = ['id']
-
+ 
     def _recalc_total(self, order):
+        """
+        يحسب الـ total من الـ subtotal الموجود.
+        لو الـ subtotal جه من الـ frontend استخدمه،
+        لو لأ احسبه من الـ items (لو موجودة).
+        """
+        items_subtotal = sum(item.total_price for item in order.items.all())
+ 
+        # لو في items حقيقية في الـ DB، استخدمهم — أدق
+        if items_subtotal > 0:
+            order.subtotal = items_subtotal
+ 
         order.total = (
             Decimal(str(order.subtotal or 0))
             - Decimal(str(order.discount_amount or 0))
             + Decimal(str(order.tax_amount or 0))
             + Decimal(str(order.shipping_cost or 0))
         )
-        order.save(update_fields=['total'])
+        order.save(update_fields=['subtotal', 'total'])
         return order
-
+ 
     def create(self, validated_data):
         order = super().create(validated_data)
         return self._recalc_total(order)
-
+ 
     def update(self, instance, validated_data):
         order = super().update(instance, validated_data)
         return self._recalc_total(order)
-
 
 # ============================================================
 #  MODULE 2 — INVENTORY
@@ -228,7 +244,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 class PurchaseOrderWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseOrder
-        fields = [
+        fields = ['id',  
             'supplier', 'status', 'expected_date',
             'warehouse', 'notes', 'created_by',
         ]
