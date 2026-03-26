@@ -599,6 +599,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 quantity=item_data['quantity'],
             )
 
+            # Deduct stock
+            if variant:
+                variant.stock -= item_data['quantity']
+                variant.save()
+
         # Update coupon usage
         if coupon:
             coupon.used_count += 1
