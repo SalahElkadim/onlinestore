@@ -27,10 +27,10 @@ ALLOWED_HOSTS = os.getenv(
     'ALLOWED_HOSTS', 
     'localhost,127.0.0.1,onlinestore-production-d7b2.up.railway.app'
 ).split(',')
+
 # Security settings للـ production
 if not DEBUG:
     SECURE_SSL_REDIRECT = False  # ← خليها False، Railway بيتولى الـ SSL
-    SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -185,13 +185,12 @@ SIMPLE_JWT = {
 # CORS CONFIGURATION
 # ============================================================
 
-# Development & Production
 CORS_ALLOWED_ORIGINS = os.getenv(
     'CORS_ALLOWED_ORIGINS', 
     'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,https://trendshop-production.up.railway.app,https://admin-dashboard-production-cdaa.up.railway.app'
 ).split(',')
 
-CORS_ALLOW_CREDENTIALS = False
+CORS_ALLOW_CREDENTIALS = True       # ← تم التغيير من False لـ True
 
 CORS_ALLOW_METHODS = [
     'DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT',
@@ -219,10 +218,15 @@ CACHES = {
     },
 }
 
-# Session backend
+# ============================================================
+# SESSION
+# ============================================================
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_SAVE_EVERY_REQUEST = True
-SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'None'    # ← تم التغيير من Lax لـ None
+SESSION_COOKIE_SECURE = True        # ← تم النقل لبره الـ if وخليها True دايماً
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # أسبوع
 
 # ============================================================
 # URL & TEMPLATES
