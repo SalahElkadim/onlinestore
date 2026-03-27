@@ -257,56 +257,48 @@ class AddToCartView(StandardResponseMixin, CartMixin, APIView):
         cart.refresh_from_db()
         return self.success(CartSerializer(cart).data, 'تمت الإضافة للسلة.', status.HTTP_201_CREATED)
 
+
 class UpdateCartItemView(StandardResponseMixin, CartMixin, APIView):
     permission_classes = [AllowAny]
 
-    def _get_item(self, request, item_id):
-        """يجيب الـ item مع التحقق من الـ ownership بشكل صح."""
-        if request.user.is_authenticated:
-            return CartItem.objects.select_related('cart', 'variant').get(
-                id=item_id,
-                cart__user=request.user
-            )
-        else:
-            session_key = request.session.session_key
-            if not session_key:
-                raise CartItem.DoesNotExist
-            return CartItem.objects.select_related('cart', 'variant').get(
-                id=item_id,
-                cart__session_key=session_key
-            )
-
     def patch(self, request, item_id):
+        cart = self.get_cart(request)
+
         try:
-            item = self._get_item(request, item_id)
+            item = CartItem.objects.get(id=item_id, cart=cart)
         except CartItem.DoesNotExist:
-            return self.error('المنتج غير موجود في السلة.')
+            # Debug: اطبع الـ cart id والـ items الموجودة
+            all_items = CartItem.objects.filter(cart=cart)
+            return self.error(
+                f'المنتج غير موجود. Cart ID: {cart.id}, Items: {list(all_items.values_list("id", flat=True))}'
+            )
 
         serializer = UpdateCartItemSerializer(data=request.data)
         if not serializer.is_valid():
             return self.error('بيانات غير صحيحة.', serializer.errors)
 
         new_qty = serializer.validated_data['quantity']
+
         if item.variant and item.variant.stock < new_qty:
             return self.error(f"الكمية المتاحة: {item.variant.stock} فقط.")
 
         item.quantity = new_qty
         item.save()
-
-        cart = item.cart
         cart.refresh_from_db()
         return self.success(CartSerializer(cart).data, 'تم تحديث الكمية.')
 
     def delete(self, request, item_id):
+        cart = self.get_cart(request)
+
         try:
-            item = self._get_item(request, item_id)
+            item = CartItem.objects.get(id=item_id, cart=cart)
         except CartItem.DoesNotExist:
             return self.error('المنتج غير موجود في السلة.')
 
-        cart = item.cart
         item.delete()
         cart.refresh_from_db()
         return self.success(CartSerializer(cart).data, 'تم حذف الأيتم.')
+
 
 class ClearCartView(StandardResponseMixin, CartMixin, APIView):
     permission_classes = [AllowAny]
