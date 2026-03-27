@@ -257,21 +257,23 @@ class AddToCartView(StandardResponseMixin, CartMixin, APIView):
         cart.refresh_from_db()
         return self.success(CartSerializer(cart).data, 'تمت الإضافة للسلة.', status.HTTP_201_CREATED)
 
-
 class UpdateCartItemView(StandardResponseMixin, CartMixin, APIView):
     permission_classes = [AllowAny]
 
+    def get_cart_by_id_or_session(self, request):
+        cart_id = request.query_params.get('cart_id')
+        if cart_id:
+            from django.shortcuts import get_object_or_404
+            return get_object_or_404(Cart, id=cart_id)
+        return self.get_cart(request)
+
     def patch(self, request, item_id):
-        cart = self.get_cart(request)
+        cart = self.get_cart_by_id_or_session(request)
 
         try:
             item = CartItem.objects.get(id=item_id, cart=cart)
         except CartItem.DoesNotExist:
-            # Debug: اطبع الـ cart id والـ items الموجودة
-            all_items = CartItem.objects.filter(cart=cart)
-            return self.error(
-                f'المنتج غير موجود. Cart ID: {cart.id}, Items: {list(all_items.values_list("id", flat=True))}'
-            )
+            return self.error('المنتج غير موجود في السلة.')
 
         serializer = UpdateCartItemSerializer(data=request.data)
         if not serializer.is_valid():
@@ -288,7 +290,7 @@ class UpdateCartItemView(StandardResponseMixin, CartMixin, APIView):
         return self.success(CartSerializer(cart).data, 'تم تحديث الكمية.')
 
     def delete(self, request, item_id):
-        cart = self.get_cart(request)
+        cart = self.get_cart_by_id_or_session(request)
 
         try:
             item = CartItem.objects.get(id=item_id, cart=cart)
@@ -304,7 +306,12 @@ class ClearCartView(StandardResponseMixin, CartMixin, APIView):
     permission_classes = [AllowAny]
 
     def delete(self, request):
-        cart = self.get_cart(request)
+        cart_id = request.query_params.get('cart_id')
+        if cart_id:
+            from django.shortcuts import get_object_or_404
+            cart = get_object_or_404(Cart, id=cart_id)
+        else:
+            cart = self.get_cart(request)
         cart.items.all().delete()
         return self.success(message='تم تفريغ السلة.')
 
