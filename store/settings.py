@@ -188,7 +188,7 @@ SIMPLE_JWT = {
 # Development & Production
 CORS_ALLOWED_ORIGINS = os.getenv(
     'CORS_ALLOWED_ORIGINS', 
-    'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,https://trendshop-production.up.railway.app,https://admin-dashboard-production-cdaa.up.railway.app,https://www.trendsshopstore.com/'
+    'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,https://trendshop-production.up.railway.app,https://admin-dashboard-production-cdaa.up.railway.app,https://www.trendsshopstore.com,https://trendsshopstore.com, '
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = False
