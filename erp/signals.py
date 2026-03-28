@@ -1,10 +1,21 @@
-from django.db.models.signals import post_save, post_delete
+"""
+============================================================
+  ERP APPLICATION — signals.py
+  التعديلات:
+  - إزالة الخصم من variant.stock في OrderCreateSerializer
+    (ده بيحصل في dashboard/serializers.py — شوف التعليق هناك)
+  - مصدر واحد للحقيقة: WarehouseStock فقط
+============================================================
+"""
+
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
 
 # ─────────────────────────────────────────────
 #  1. خصم المخزون عند إنشاء SalesOrderItem
+#     (أوردرات الـ ERP الداخلية — مش Online Orders)
 # ─────────────────────────────────────────────
 @receiver(post_save, sender='erp.SalesOrderItem')
 def deduct_stock_on_sale(sender, instance, created, **kwargs):
@@ -50,26 +61,21 @@ def deduct_stock_on_sale(sender, instance, created, **kwargs):
 
 
 # ─────────────────────────────────────────────
-#  2. ✅ FIX: إنشاء/تحديث Revenue لأي status
-#     مش بس confirmed
+#  2. إنشاء/تحديث Revenue لأي status
 # ─────────────────────────────────────────────
 @receiver(post_save, sender='erp.SalesOrder')
 def sync_revenue_on_order_save(sender, instance, **kwargs):
     from erp.models import Revenue
 
-    # ✅ الحالات اللي مفروض ينشأ ليها إيراد
     REVENUE_STATUSES = {'confirmed', 'processing', 'shipped', 'delivered'}
-    # ✅ الحالات اللي المفروض نحذف/نلغي إيرادها
     NO_REVENUE_STATUSES = {'cancelled', 'returned', 'draft'}
 
     if instance.status in NO_REVENUE_STATUSES:
-        # لو الأوردر اتلغى أو مسودة، احذف الإيراد لو موجود
         Revenue.objects.filter(sales_order=instance).delete()
         return
 
     if instance.status in REVENUE_STATUSES:
         from erp.models import SalesOrder
-        # اجلب الـ total الطازج من الـ DB
         fresh_total = SalesOrder.objects.filter(
             pk=instance.pk
         ).values_list('total', flat=True).first()
@@ -107,7 +113,6 @@ def _recalc_and_sync_revenue(order):
         + Decimal(str(order.shipping_cost or 0))
     )
 
-    # ✅ حدّث الـ totals في الـ order
     type(order).objects.filter(pk=order.pk).update(
         subtotal=subtotal,
         total=total,
@@ -127,7 +132,6 @@ def _recalc_and_sync_revenue(order):
             }
         )
     else:
-        # لو مش في الـ statuses دي، حدّث المبلغ بس لو موجود
         Revenue.objects.filter(
             sales_order=order,
             source='sale',

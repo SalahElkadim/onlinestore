@@ -1,3 +1,16 @@
+"""
+============================================================
+  DASHBOARD APPLICATION — serializers.py
+  
+  التغيير الأساسي في OrderCreateSerializer.create():
+  - إزالة السطرين دول:
+        variant.stock -= item['quantity']
+        variant.save()
+  - دلوقتي الخصم بيحصل بس من WarehouseStock عند الـ confirm
+    عن طريق dashboard/signals.py → deduct_warehouse_stock_on_confirm
+============================================================
+"""
+
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.utils import timezone
@@ -9,7 +22,7 @@ from .models import (
     Order, OrderItem,
     Payment,
     Notification,
-    ActivityLog,ProductVideo
+    ActivityLog, ProductVideo
 )
 
 
@@ -100,9 +113,9 @@ class UserListSerializer(serializers.ModelSerializer):
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """Full profile – used in detail/create/update."""
-    full_name    = serializers.SerializerMethodField()
-    total_orders = serializers.SerializerMethodField()
-    total_spent  = serializers.SerializerMethodField()
+    full_name     = serializers.SerializerMethodField()
+    total_orders  = serializers.SerializerMethodField()
+    total_spent   = serializers.SerializerMethodField()
     recent_orders = serializers.SerializerMethodField()
 
     class Meta:
@@ -217,7 +230,6 @@ class CategoryWriteSerializer(serializers.ModelSerializer):
         fields = ['name', 'parent', 'image', 'is_active']
 
     def validate_parent(self, value):
-        # Prevent a category from being its own parent
         if self.instance and value and value.id == self.instance.id:
             raise serializers.ValidationError("A category cannot be its own parent.")
         return value
@@ -233,7 +245,8 @@ class AttributeValueSerializer(serializers.ModelSerializer):
     class Meta:
         model  = AttributeValue
         fields = ['id', 'attribute', 'attribute_name', 'value']
-        read_only_fields = ['attribute', 'attribute_name']  # ✅ الـ attribute بييجي من الـ URL مش من الـ body
+        read_only_fields = ['attribute', 'attribute_name']
+
 
 class AttributeSerializer(serializers.ModelSerializer):
     values = AttributeValueSerializer(many=True, read_only=True)
@@ -250,7 +263,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
-    attribute_values = AttributeValueSerializer(many=True, read_only=True)
+    attribute_values    = AttributeValueSerializer(many=True, read_only=True)
     attribute_value_ids = serializers.PrimaryKeyRelatedField(
         queryset=AttributeValue.objects.all(),
         many=True, write_only=True, source='attribute_values'
@@ -273,9 +286,9 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
 class ProductListSerializer(serializers.ModelSerializer):
     """Lightweight – used in tables/lists."""
-    category_name      = serializers.CharField(source='category.name', read_only=True)
-    primary_image      = serializers.SerializerMethodField()
-    total_stock        = serializers.IntegerField(read_only=True)
+    category_name       = serializers.CharField(source='category.name', read_only=True)
+    primary_image       = serializers.SerializerMethodField()
+    total_stock         = serializers.IntegerField(read_only=True)
     discount_percentage = serializers.DecimalField(max_digits=5, decimal_places=1, read_only=True)
 
     class Meta:
@@ -297,12 +310,12 @@ class ProductListSerializer(serializers.ModelSerializer):
 
 class ProductDetailSerializer(serializers.ModelSerializer):
     """Full product detail with variants and images."""
-    images           = ProductImageSerializer(many=True, read_only=True)
-    variants         = ProductVariantSerializer(many=True, read_only=True)
-    category_name    = serializers.CharField(source='category.name', read_only=True)
-    total_stock      = serializers.IntegerField(read_only=True)
+    images              = ProductImageSerializer(many=True, read_only=True)
+    variants            = ProductVariantSerializer(many=True, read_only=True)
+    category_name       = serializers.CharField(source='category.name', read_only=True)
+    total_stock         = serializers.IntegerField(read_only=True)
     discount_percentage = serializers.DecimalField(max_digits=5, decimal_places=1, read_only=True)
-    effective_price  = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    effective_price     = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model  = Product
@@ -320,7 +333,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 class ProductWriteSerializer(serializers.ModelSerializer):
     """Create / Update product."""
     uploaded_images = serializers.ListField(
-    child=serializers.CharField(), write_only=True, required=False)
+        child=serializers.CharField(), write_only=True, required=False)
     uploaded_videos = serializers.ListField(
         child=serializers.CharField(), write_only=True, required=False
     )
@@ -332,8 +345,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             'price', 'discount_price',
             'sku', 'category', 'status',
             'uploaded_images',
-            'uploaded_videos',  # ← ضيفه هنا
-
+            'uploaded_videos',
         ]
 
     def validate_discount_price(self, value):
@@ -349,15 +361,14 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         for i, url in enumerate(images_data):
             ProductImage.objects.create(
                 product=product,
-                image=url,        # ← Cloudinary URL
+                image=url,
                 is_primary=(i == 0),
                 order=i
             )
-
         for i, url in enumerate(videos_data):
             ProductVideo.objects.create(
                 product=product,
-                video=url,        # ← Cloudinary URL
+                video=url,
                 order=i
             )
         return product
@@ -384,8 +395,8 @@ class ProductWriteSerializer(serializers.ModelSerializer):
 # ============================================================
 
 class CouponSerializer(serializers.ModelSerializer):
-    is_valid          = serializers.BooleanField(read_only=True)
-    remaining_uses    = serializers.SerializerMethodField()
+    is_valid              = serializers.BooleanField(read_only=True)
+    remaining_uses        = serializers.SerializerMethodField()
     discount_type_display = serializers.CharField(source='get_discount_type_display', read_only=True)
 
     class Meta:
@@ -401,7 +412,7 @@ class CouponSerializer(serializers.ModelSerializer):
 
     def get_remaining_uses(self, obj):
         if obj.max_uses is None:
-            return None  # Unlimited
+            return None
         return max(0, obj.max_uses - obj.used_count)
 
     def validate_code(self, value):
@@ -430,18 +441,19 @@ class ValidateCouponSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 f"Minimum order value for this coupon is {coupon.min_order_value}."
             )
-        data['coupon']            = coupon
-        data['discount_amount']   = coupon.calculate_discount(data['order_total'])
-        data['final_total']       = data['order_total'] - data['discount_amount']
+        data['coupon']          = coupon
+        data['discount_amount'] = coupon.calculate_discount(data['order_total'])
+        data['final_total']     = data['order_total'] - data['discount_amount']
         return data
 
 
 # ============================================================
 # 6. ORDER SERIALIZERS
 # ============================================================
+
 class OrderItemSerializer(serializers.ModelSerializer):
     total_price   = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    product_image = serializers.SerializerMethodField()  # ← ضيف ده
+    product_image = serializers.SerializerMethodField()
 
     class Meta:
         model  = OrderItem
@@ -449,7 +461,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
             'id', 'product', 'variant',
             'product_name', 'variant_name',
             'unit_price', 'quantity', 'total_price',
-            'product_image',  # ← ضيف ده
+            'product_image',
         ]
 
     def get_product_image(self, obj):
@@ -474,19 +486,35 @@ class OrderItemWriteSerializer(serializers.ModelSerializer):
         if variant:
             if variant.product != product:
                 raise serializers.ValidationError("Variant does not belong to this product.")
-            if variant.stock < qty:
-                raise serializers.ValidationError(
-                    f"Insufficient stock for '{product.name}'. Available: {variant.stock}"
-                )
+            # ✅ التحقق من المخزون بيحصل من WarehouseStock مش variant.stock
+            from erp.models import WarehouseStock, Warehouse
+            warehouse = Warehouse.objects.filter(is_default=True).first()
+            if warehouse:
+                try:
+                    ws = WarehouseStock.objects.get(warehouse=warehouse, variant=variant)
+                    if ws.quantity < qty:
+                        raise serializers.ValidationError(
+                            f"Insufficient stock for '{product.name}'. Available: {ws.quantity}"
+                        )
+                except WarehouseStock.DoesNotExist:
+                    raise serializers.ValidationError(
+                        f"No stock found for '{product.name}' in the default warehouse."
+                    )
+            else:
+                # fallback للـ variant.stock لو مفيش warehouse
+                if variant.stock < qty:
+                    raise serializers.ValidationError(
+                        f"Insufficient stock for '{product.name}'. Available: {variant.stock}"
+                    )
         return data
 
 
 class OrderListSerializer(serializers.ModelSerializer):
     """Lightweight – used in order tables."""
-    customer_name  = serializers.SerializerMethodField()
-    customer_email = serializers.CharField(source='user.email', read_only=True)
-    items_count    = serializers.SerializerMethodField()
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    customer_name          = serializers.SerializerMethodField()
+    customer_email         = serializers.CharField(source='user.email', read_only=True)
+    items_count            = serializers.SerializerMethodField()
+    status_display         = serializers.CharField(source='get_status_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
 
     class Meta:
@@ -509,11 +537,11 @@ class OrderListSerializer(serializers.ModelSerializer):
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     """Full order detail."""
-    items          = OrderItemSerializer(many=True, read_only=True)
-    payments       = serializers.SerializerMethodField()
-    customer       = UserListSerializer(source='user', read_only=True)
-    coupon_code    = serializers.CharField(source='coupon.code', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    items                  = OrderItemSerializer(many=True, read_only=True)
+    payments               = serializers.SerializerMethodField()
+    customer               = UserListSerializer(source='user', read_only=True)
+    coupon_code            = serializers.CharField(source='coupon.code', read_only=True)
+    status_display         = serializers.CharField(source='get_status_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
 
     class Meta:
@@ -521,16 +549,12 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_number',
             'customer', 'coupon', 'coupon_code',
-            # Pricing
             'subtotal', 'discount_amount', 'shipping_cost', 'total_price',
-            # Status
             'status', 'status_display',
             'payment_method', 'payment_status', 'payment_status_display',
-            # Shipping
             'shipping_name', 'shipping_phone', 'shipping_address',
             'shipping_city', 'shipping_country', 'shipping_postal_code',
             'notes',
-            # Relations
             'items', 'payments',
             'created_at', 'updated_at',
         ]
@@ -540,7 +564,16 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
 
 class OrderCreateSerializer(serializers.ModelSerializer):
-    """Create a new order with items."""
+    """
+    Create a new order with items.
+
+    ✅ التغيير الأساسي:
+    - اتشالت الأسطر دي من create():
+          variant.stock -= item['quantity']
+          variant.save()
+    - الخصم دلوقتي بيحصل بس من WarehouseStock عند الـ confirm
+      عن طريق dashboard/signals.py → deduct_warehouse_stock_on_confirm
+    """
     items = OrderItemWriteSerializer(many=True)
 
     class Meta:
@@ -550,7 +583,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'payment_method',
             'shipping_name', 'shipping_phone', 'shipping_address',
             'shipping_city', 'shipping_country', 'shipping_postal_code',
-            'notes', 'items','shipping_cost'
+            'notes', 'items', 'shipping_cost',
         ]
 
     def validate_items(self, value):
@@ -560,9 +593,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         from decimal import Decimal
-        items_data = validated_data.pop('items')
-        coupon     = validated_data.pop('coupon', None)
-        shipping_cost = Decimal(str(validated_data.pop('shipping_cost', 0)))  # ← ضيف
+        items_data    = validated_data.pop('items')
+        coupon        = validated_data.pop('coupon', None)
+        shipping_cost = Decimal(str(validated_data.pop('shipping_cost', 0)))
 
         # Calculate pricing
         subtotal = Decimal('0')
@@ -573,13 +606,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             subtotal += price * item_data['quantity']
 
         discount_amount = coupon.calculate_discount(subtotal) if coupon else Decimal('0')
-        total_price     = subtotal - discount_amount+ shipping_cost 
+        total_price     = subtotal - discount_amount + shipping_cost
 
         order = Order.objects.create(
             coupon=coupon,
             subtotal=subtotal,
             discount_amount=discount_amount,
-            shipping_cost=shipping_cost,  # ← ضيف
+            shipping_cost=shipping_cost,
             total_price=total_price,
             **validated_data
         )
@@ -599,10 +632,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 quantity=item_data['quantity'],
             )
 
-            # Deduct stock
-            if variant:
-                variant.stock -= item_data['quantity']
-                variant.save()
+            # ✅ لا يوجد خصم من variant.stock هنا
+            # الخصم بيحصل من WarehouseStock عند تحويل الأوردر لـ confirmed
+            # في dashboard/signals.py → deduct_warehouse_stock_on_confirm
 
         # Update coupon usage
         if coupon:
@@ -620,7 +652,6 @@ class UpdateOrderStatusSerializer(serializers.ModelSerializer):
 
     def validate_status(self, value):
         instance = self.instance
-        # Define allowed transitions
         allowed = {
             Order.Status.PENDING:   [Order.Status.CONFIRMED, Order.Status.CANCELLED],
             Order.Status.CONFIRMED: [Order.Status.SHIPPED, Order.Status.CANCELLED],
@@ -673,7 +704,7 @@ class NotificationSerializer(serializers.ModelSerializer):
 # ============================================================
 
 class ActivityLogSerializer(serializers.ModelSerializer):
-    admin_email  = serializers.CharField(source='admin.email', read_only=True)
+    admin_email    = serializers.CharField(source='admin.email', read_only=True)
     action_display = serializers.CharField(source='get_action_display', read_only=True)
 
     class Meta:
@@ -695,22 +726,22 @@ class KPICardSerializer(serializers.Serializer):
     """Single KPI card data."""
     label       = serializers.CharField()
     value       = serializers.CharField()
-    change      = serializers.FloatField()       # % change vs previous period
+    change      = serializers.FloatField()
     change_type = serializers.ChoiceField(choices=['increase', 'decrease', 'neutral'])
     icon        = serializers.CharField()
 
 
 class SalesChartPointSerializer(serializers.Serializer):
-    date     = serializers.DateField()
-    revenue  = serializers.DecimalField(max_digits=12, decimal_places=2)
-    orders   = serializers.IntegerField()
+    date    = serializers.DateField()
+    revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
+    orders  = serializers.IntegerField()
 
 
 class TopProductSerializer(serializers.Serializer):
-    id           = serializers.IntegerField()
-    name         = serializers.CharField()
-    image        = serializers.CharField(allow_null=True)
-    total_sold   = serializers.IntegerField()
+    id            = serializers.IntegerField()
+    name          = serializers.CharField()
+    image         = serializers.CharField(allow_null=True)
+    total_sold    = serializers.IntegerField()
     total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
 
 
@@ -723,37 +754,28 @@ class TopCustomerSerializer(serializers.Serializer):
 
 
 class DashboardStatsSerializer(serializers.Serializer):
-    """
-    Full dashboard response shape – assembled in the view from DB queries.
-    """
-    # KPI Cards
-    total_revenue       = serializers.DecimalField(max_digits=12, decimal_places=2)
-    total_orders        = serializers.IntegerField()
-    total_customers     = serializers.IntegerField()
-    total_products      = serializers.IntegerField()
-    pending_orders      = serializers.IntegerField()
-    low_stock_count     = serializers.IntegerField()
-
-    # Period comparisons
-    revenue_change      = serializers.FloatField()   # % vs last period
-    orders_change       = serializers.FloatField()
-    customers_change    = serializers.FloatField()
-
-    # Charts
-    sales_chart         = SalesChartPointSerializer(many=True)
-    top_products        = TopProductSerializer(many=True)
-    top_customers       = TopCustomerSerializer(many=True)
-
-    # Recent
-    recent_orders       = OrderListSerializer(many=True)
+    """Full dashboard response shape."""
+    total_revenue    = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_orders     = serializers.IntegerField()
+    total_customers  = serializers.IntegerField()
+    total_products   = serializers.IntegerField()
+    pending_orders   = serializers.IntegerField()
+    low_stock_count  = serializers.IntegerField()
+    revenue_change   = serializers.FloatField()
+    orders_change    = serializers.FloatField()
+    customers_change = serializers.FloatField()
+    sales_chart      = SalesChartPointSerializer(many=True)
+    top_products     = TopProductSerializer(many=True)
+    top_customers    = TopCustomerSerializer(many=True)
+    recent_orders    = OrderListSerializer(many=True)
     recent_notifications = NotificationSerializer(many=True)
 
 
 class InventoryAlertSerializer(serializers.ModelSerializer):
     """Used in inventory dashboard – highlights low/out-of-stock variants."""
-    product_name   = serializers.CharField(source='product.name')
-    variant_label  = serializers.SerializerMethodField()
-    status         = serializers.SerializerMethodField()
+    product_name  = serializers.CharField(source='product.name')
+    variant_label = serializers.SerializerMethodField()
+    status        = serializers.SerializerMethodField()
 
     class Meta:
         model  = ProductVariant
@@ -763,7 +785,7 @@ class InventoryAlertSerializer(serializers.ModelSerializer):
         return ", ".join(av.value for av in obj.attribute_values.all())
 
     def get_status(self, obj):
-        stock = getattr(obj, 'real_stock', obj.stock)  # fallback للـ property
+        stock = getattr(obj, 'real_stock', obj.stock)
         if stock == 0:
             return 'out_of_stock'
         if stock <= 5:
