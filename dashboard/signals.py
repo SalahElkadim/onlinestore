@@ -249,3 +249,21 @@ def create_erp_revenue_on_payment(sender, instance, **kwargs):
             date=timezone.now().date(),
             description=f"Refund: {instance.order_number} — {instance.shipping_name}",
         )
+
+@receiver(post_save, sender='dashboard.ProductVariant')
+def create_warehouse_stock_on_variant_create(sender, instance, created, **kwargs):
+    """لما variant جديد يتعمل → اعمله WarehouseStock record بـ quantity = 0"""
+    if not created:
+        return
+
+    from erp.models import Warehouse, WarehouseStock
+
+    warehouse = Warehouse.objects.filter(is_default=True).first()
+    if not warehouse:
+        return
+
+    WarehouseStock.objects.get_or_create(
+        warehouse=warehouse,
+        variant=instance,
+        defaults={'quantity': 0}
+    )
