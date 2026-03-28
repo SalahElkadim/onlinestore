@@ -770,16 +770,18 @@ class DashboardStatsSerializer(serializers.Serializer):
     recent_orders    = OrderListSerializer(many=True)
     recent_notifications = NotificationSerializer(many=True)
 
-
 class InventoryAlertSerializer(serializers.ModelSerializer):
-    """Used in inventory dashboard – highlights low/out-of-stock variants."""
     product_name  = serializers.CharField(source='product.name')
     variant_label = serializers.SerializerMethodField()
     status        = serializers.SerializerMethodField()
+    stock         = serializers.SerializerMethodField()  # ← بدل الـ field المباشر
 
     class Meta:
         model  = ProductVariant
         fields = ['id', 'product', 'product_name', 'variant_label', 'stock', 'sku', 'status']
+
+    def get_stock(self, obj):
+        return getattr(obj, 'real_stock', obj.stock)
 
     def get_variant_label(self, obj):
         return ", ".join(av.value for av in obj.attribute_values.all())
