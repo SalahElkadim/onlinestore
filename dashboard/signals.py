@@ -6,6 +6,7 @@
   - الخصم من WarehouseStock بيحصل هنا عند تحويل الأوردر لـ confirmed
   - مصدر واحد للحقيقة: WarehouseStock فقط
   - مفيش خصم من variant.stock هنا (اتشال من serializers.py)
+  - ✅ جديد: fallback لو item.variant = null → بنجيب أول variant للمنتج
 ============================================================
 """
 
@@ -26,6 +27,25 @@ def track_order_status_before_save(sender, instance, **kwargs):
             instance._old_status = None
     else:
         instance._old_status = None
+
+
+# ─────────────────────────────────────────────
+#  Helper: جيب الـ variant الصح من الـ item
+# ─────────────────────────────────────────────
+def _resolve_variant(item):
+    """
+    لو الـ item عنده variant → استخدمه.
+    لو لأ → جيب أول variant نشط للمنتج كـ fallback.
+    لو المنتج معندوش variants خالص → رجّع None.
+    """
+    if item.variant:
+        return item.variant
+
+    from dashboard.models import ProductVariant
+    return ProductVariant.objects.filter(
+        product=item.product,
+        is_active=True
+    ).first()
 
 
 # ─────────────────────────────────────────────
@@ -51,8 +71,8 @@ def deduct_warehouse_stock_on_confirm(sender, instance, **kwargs):
     if not warehouse:
         return
 
-    for item in instance.items.select_related('variant').all():
-        variant = item.variant
+    for item in instance.items.select_related('variant', 'product').all():
+        variant = _resolve_variant(item)
         if not variant:
             continue
 
@@ -105,8 +125,8 @@ def restock_on_order_cancel_or_return(sender, instance, **kwargs):
     if not warehouse:
         return
 
-    for item in instance.items.select_related('variant').all():
-        variant = item.variant
+    for item in instance.items.select_related('variant', 'product').all():
+        variant = _resolve_variant(item)
         if not variant:
             continue
 
