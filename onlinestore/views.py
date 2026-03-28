@@ -1,16 +1,3 @@
-"""
-============================================================
-  STORE APPLICATION — views.py
-
-  التغيير في CancelOrderView.post():
-  - اتشال الخصم القديم من variant.stock:
-        item.variant.stock += item.quantity
-        item.variant.save()
-  - دلوقتي الإرجاع بيحصل تلقائياً من
-    dashboard/signals.py → restock_on_order_cancel_or_return
-    لما الأوردر يتحول لـ cancelled
-============================================================
-"""
 
 from rest_framework import status, filters
 from rest_framework.views import APIView

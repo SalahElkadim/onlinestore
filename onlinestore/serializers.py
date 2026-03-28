@@ -1,16 +1,3 @@
-"""
-============================================================
-  STORE APPLICATION — serializers.py
-
-  التغيير الأساسي في CheckoutSerializer.create():
-  - اتشال الخصم المباشر من warehouse_stocks:
-        variant.warehouse_stocks.update(quantity=F('quantity') - item['quantity'])
-  - الخصم دلوقتي بيحصل بس من WarehouseStock عند تحويل الأوردر لـ confirmed
-    عن طريق dashboard/signals.py → deduct_warehouse_stock_on_confirm
-  - التحقق من المخزون في CheckoutItemSerializer.validate() اتعدّل
-    عشان يقرأ من WarehouseStock مش variant.stock
-============================================================
-"""
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model

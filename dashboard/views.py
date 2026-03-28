@@ -733,12 +733,15 @@ class OrderDetailView(StandardResponseMixin, RetrieveAPIView):
         'items__product', 'items__variant', 'payments'
     )
 
-
 class UpdateOrderStatusView(StandardResponseMixin, APIView):
     permission_classes = [IsAdminOrStaff]
 
     def patch(self, request, pk):
-        order      = get_object_or_404(Order, pk=pk)
+        order = get_object_or_404(Order, pk=pk)
+
+        # ✅ احفظ الـ _old_status يدويًا قبل الـ serializer
+        order._old_status = order.status
+
         serializer = UpdateOrderStatusSerializer(order, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
