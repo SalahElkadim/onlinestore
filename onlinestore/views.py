@@ -1,3 +1,17 @@
+"""
+============================================================
+  STORE APPLICATION — views.py
+
+  التغيير في CancelOrderView.post():
+  - اتشال الخصم القديم من variant.stock:
+        item.variant.stock += item.quantity
+        item.variant.save()
+  - دلوقتي الإرجاع بيحصل تلقائياً من
+    dashboard/signals.py → restock_on_order_cancel_or_return
+    لما الأوردر يتحول لـ cancelled
+============================================================
+"""
+
 from rest_framework import status, filters
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
@@ -43,7 +57,6 @@ class CartMixin:
             cart, _ = Cart.objects.get_or_create(user=request.user)
             return cart
 
-        # Guest
         if cart_id:
             try:
                 return Cart.objects.get(id=cart_id, user=None)
@@ -223,12 +236,11 @@ class AddToCartView(StandardResponseMixin, CartMixin, APIView):
         serializer = AddToCartSerializer(data=request.data)
         if not serializer.is_valid():
             return self.error('بيانات غير صحيحة.', serializer.errors)
-        cart = self.get_cart(request, cart_id=serializer.validated_data.get('cart_id'))
+        cart    = self.get_cart(request, cart_id=serializer.validated_data.get('cart_id'))
         product = serializer.validated_data['product']
         variant = serializer.validated_data['variant']
         qty     = serializer.validated_data['quantity']
 
-        # لو في variant
         if variant:
             item, created = CartItem.objects.get_or_create(
                 cart=cart,
@@ -236,7 +248,6 @@ class AddToCartView(StandardResponseMixin, CartMixin, APIView):
                 defaults={'product': product, 'quantity': 0}
             )
         else:
-            # منتج بدون variant
             item, created = CartItem.objects.get_or_create(
                 cart=cart,
                 product=product,
@@ -247,9 +258,9 @@ class AddToCartView(StandardResponseMixin, CartMixin, APIView):
         item.quantity += qty
         item.save()
 
-        # أعد جلب الـ cart عشان الـ serializer يشوف التحديثات
         cart.refresh_from_db()
         return self.success(CartSerializer(cart).data, 'تمت الإضافة للسلة.', status.HTTP_201_CREATED)
+
 
 class UpdateCartItemView(StandardResponseMixin, CartMixin, APIView):
     permission_classes = [AllowAny]
@@ -257,7 +268,6 @@ class UpdateCartItemView(StandardResponseMixin, CartMixin, APIView):
     def get_cart_by_id_or_session(self, request):
         cart_id = request.query_params.get('cart_id')
         if cart_id:
-            from django.shortcuts import get_object_or_404
             return get_object_or_404(Cart, id=cart_id)
         return self.get_cart(request)
 
@@ -302,7 +312,6 @@ class ClearCartView(StandardResponseMixin, CartMixin, APIView):
     def delete(self, request):
         cart_id = request.query_params.get('cart_id')
         if cart_id:
-            from django.shortcuts import get_object_or_404
             cart = get_object_or_404(Cart, id=cart_id)
         else:
             cart = self.get_cart(request)
@@ -381,10 +390,10 @@ class CancelOrderView(StandardResponseMixin, APIView):
         order.status = Order.Status.CANCELLED
         order.save()
 
-        for item in order.items.all():
-            if item.variant:
-                item.variant.stock += item.quantity
-                item.variant.save()
+        # ✅ لا يوجد خصم يدوي من variant.stock هنا
+        # الـ signal في dashboard/signals.py → restock_on_order_cancel_or_return
+        # بيرجع المخزون لـ WarehouseStock تلقائياً لو الأوردر كان confirmed
+        # لو الأوردر كان pending ما اتخصمش أصلاً فمفيش حاجة ترجعها
 
         OrderCancellation.objects.create(
             order=order,

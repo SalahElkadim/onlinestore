@@ -1,3 +1,17 @@
+"""
+============================================================
+  STORE APPLICATION — serializers.py
+
+  التغيير الأساسي في CheckoutSerializer.create():
+  - اتشال الخصم المباشر من warehouse_stocks:
+        variant.warehouse_stocks.update(quantity=F('quantity') - item['quantity'])
+  - الخصم دلوقتي بيحصل بس من WarehouseStock عند تحويل الأوردر لـ confirmed
+    عن طريق dashboard/signals.py → deduct_warehouse_stock_on_confirm
+  - التحقق من المخزون في CheckoutItemSerializer.validate() اتعدّل
+    عشان يقرأ من WarehouseStock مش variant.stock
+============================================================
+"""
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -109,25 +123,26 @@ class StoreCategorySerializer(serializers.ModelSerializer):
 # ============================================================
 # 3. PRODUCT SERIALIZERS
 # ============================================================
-from dashboard.models import ProductVideo  # أو من مكانها
+
+from dashboard.models import ProductVideo
+
 
 class ProductVideoSerializer(serializers.ModelSerializer):
     video = serializers.SerializerMethodField()
 
     class Meta:
-        model = ProductVideo
+        model  = ProductVideo
         fields = ['id', 'video', 'order']
 
     def get_video(self, obj):
         url = str(obj.video)
-        # لو فيه تكرار في الـ URL، خد الـ URL الصح بس
         if 'https://' in url:
             idx = url.find('https://')
             return url[idx:]
-        # لو URL عادي من Cloudinary
         if obj.video and hasattr(obj.video, 'build_url'):
             return obj.video.build_url()
         return url
+
 
 class StoreProductImageSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
@@ -141,9 +156,9 @@ class StoreProductImageSerializer(serializers.ModelSerializer):
 
 
 class StoreProductVariantSerializer(serializers.ModelSerializer):
-    attribute_values  = AttributeValueSerializer(many=True, read_only=True)
-    effective_price   = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    is_out_of_stock   = serializers.BooleanField(read_only=True)
+    attribute_values = AttributeValueSerializer(many=True, read_only=True)
+    effective_price  = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    is_out_of_stock  = serializers.BooleanField(read_only=True)
 
     class Meta:
         model  = ProductVariant
@@ -156,7 +171,6 @@ class StoreProductVariantSerializer(serializers.ModelSerializer):
 
 
 class StoreProductListSerializer(serializers.ModelSerializer):
-    """خفيف – للقوائم والكاتالوج."""
     category_name       = serializers.CharField(source='category.name', read_only=True)
     primary_image       = serializers.SerializerMethodField()
     discount_percentage = serializers.DecimalField(max_digits=5, decimal_places=1, read_only=True)
@@ -192,7 +206,6 @@ class StoreProductListSerializer(serializers.ModelSerializer):
 
 
 class StoreProductDetailSerializer(serializers.ModelSerializer):
-    """كامل – لصفحة المنتج."""
     images              = StoreProductImageSerializer(many=True, read_only=True)
     variants            = StoreProductVariantSerializer(many=True, read_only=True)
     category_name       = serializers.CharField(source='category.name', read_only=True)
@@ -201,7 +214,7 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
     avg_rating          = serializers.SerializerMethodField()
     reviews_count       = serializers.SerializerMethodField()
     reviews             = serializers.SerializerMethodField()
-    videos = ProductVideoSerializer(many=True, read_only=True)  # ← ضيف
+    videos              = ProductVideoSerializer(many=True, read_only=True)
 
     class Meta:
         model  = Product
@@ -213,8 +226,7 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
             'is_in_stock', 'total_stock',
             'avg_rating', 'reviews_count', 'reviews',
             'created_at',
-            'videos',  # ← ضيف هنا
-
+            'videos',
         ]
 
     def get_avg_rating(self, obj):
@@ -234,11 +246,12 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
 # ============================================================
 # 4. CART SERIALIZERS
 # ============================================================
+
 class CartItemSerializer(serializers.ModelSerializer):
     product_name    = serializers.CharField(source='product.name', read_only=True)
     variant_label   = serializers.SerializerMethodField()
-    unit_price      = serializers.SerializerMethodField()  # ← غيّر لـ SerializerMethodField
-    subtotal        = serializers.SerializerMethodField()  # ← غيّر لـ SerializerMethodField
+    unit_price      = serializers.SerializerMethodField()
+    subtotal        = serializers.SerializerMethodField()
     primary_image   = serializers.SerializerMethodField()
     is_out_of_stock = serializers.SerializerMethodField()
 
@@ -254,7 +267,7 @@ class CartItemSerializer(serializers.ModelSerializer):
 
     def get_unit_price(self, obj):
         price = obj.variant.effective_price if obj.variant else obj.product.effective_price
-        return str(price)  # ← حوّله لـ string عشان JSON
+        return str(price)
 
     def get_subtotal(self, obj):
         price = obj.variant.effective_price if obj.variant else obj.product.effective_price
@@ -275,6 +288,7 @@ class CartItemSerializer(serializers.ModelSerializer):
         if obj.variant:
             return obj.variant.is_out_of_stock
         return not obj.product.is_in_stock
+
 
 class CartSerializer(serializers.ModelSerializer):
     items       = CartItemSerializer(many=True, read_only=True)
@@ -297,10 +311,10 @@ class CartSerializer(serializers.ModelSerializer):
 
 
 class AddToCartSerializer(serializers.Serializer):
-    product_id  = serializers.IntegerField()
-    variant_id  = serializers.IntegerField(required=False, allow_null=True)
-    quantity    = serializers.IntegerField(min_value=1, default=1)
-    cart_id  = serializers.IntegerField(required=False, allow_null=True)
+    product_id = serializers.IntegerField()
+    variant_id = serializers.IntegerField(required=False, allow_null=True)
+    quantity   = serializers.IntegerField(min_value=1, default=1)
+    cart_id    = serializers.IntegerField(required=False, allow_null=True)
 
     def validate(self, data):
         try:
@@ -319,10 +333,24 @@ class AddToCartSerializer(serializers.Serializer):
             except ProductVariant.DoesNotExist:
                 raise serializers.ValidationError("الـ variant غير موجود.")
 
-            if variant.stock < data['quantity']:
-                raise serializers.ValidationError(
-                    f"الكمية المطلوبة غير متوفرة. المتاح: {variant.stock}"
-                )
+            # ✅ التحقق من المخزون من WarehouseStock
+            from erp.models import WarehouseStock, Warehouse
+            warehouse = Warehouse.objects.filter(is_default=True).first()
+            if warehouse:
+                try:
+                    ws = WarehouseStock.objects.get(warehouse=warehouse, variant=variant)
+                    if ws.quantity < data['quantity']:
+                        raise serializers.ValidationError(
+                            f"الكمية المطلوبة غير متوفرة. المتاح: {ws.quantity}"
+                        )
+                except WarehouseStock.DoesNotExist:
+                    raise serializers.ValidationError("المنتج غير متوفر في المخزون.")
+            else:
+                # fallback
+                if variant.stock < data['quantity']:
+                    raise serializers.ValidationError(
+                        f"الكمية المطلوبة غير متوفرة. المتاح: {variant.stock}"
+                    )
 
         data['product'] = product
         data['variant'] = variant
@@ -349,10 +377,10 @@ class StoreOrderItemSerializer(serializers.ModelSerializer):
 
 
 class StoreOrderListSerializer(serializers.ModelSerializer):
-    items_count    = serializers.SerializerMethodField()
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    items_count            = serializers.SerializerMethodField()
+    status_display         = serializers.CharField(source='get_status_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
-    can_cancel     = serializers.SerializerMethodField()
+    can_cancel             = serializers.SerializerMethodField()
 
     class Meta:
         model  = Order
@@ -368,19 +396,16 @@ class StoreOrderListSerializer(serializers.ModelSerializer):
         return obj.items.count()
 
     def get_can_cancel(self, obj):
-        return obj.status in [
-            Order.Status.PENDING,
-            Order.Status.CONFIRMED,
-        ]
+        return obj.status in [Order.Status.PENDING, Order.Status.CONFIRMED]
 
 
 class StoreOrderDetailSerializer(serializers.ModelSerializer):
-    items          = StoreOrderItemSerializer(many=True, read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    items                  = StoreOrderItemSerializer(many=True, read_only=True)
+    status_display         = serializers.CharField(source='get_status_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
-    can_cancel     = serializers.SerializerMethodField()
-    cancellation   = serializers.SerializerMethodField()
-    guest_info     = serializers.SerializerMethodField()
+    can_cancel             = serializers.SerializerMethodField()
+    cancellation           = serializers.SerializerMethodField()
+    guest_info             = serializers.SerializerMethodField()
 
     class Meta:
         model  = Order
@@ -397,15 +422,12 @@ class StoreOrderDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_can_cancel(self, obj):
-        return obj.status in [
-            Order.Status.PENDING,
-            Order.Status.CONFIRMED,
-        ]
+        return obj.status in [Order.Status.PENDING, Order.Status.CONFIRMED]
 
     def get_cancellation(self, obj):
         if hasattr(obj, 'cancellation'):
             return {
-                'reason': obj.cancellation.reason,
+                'reason':       obj.cancellation.reason,
                 'cancelled_at': obj.cancellation.cancelled_at,
             }
         return None
@@ -440,10 +462,26 @@ class CheckoutItemSerializer(serializers.Serializer):
             except ProductVariant.DoesNotExist:
                 raise serializers.ValidationError("الـ variant غير موجود.")
 
-            if variant.stock < data['quantity']:
-                raise serializers.ValidationError(
-                    f"الكمية غير متوفرة للمنتج '{product.name}'. المتاح: {variant.stock}"
-                )
+            # ✅ التحقق من المخزون من WarehouseStock مش variant.stock
+            from erp.models import WarehouseStock, Warehouse
+            warehouse = Warehouse.objects.filter(is_default=True).first()
+            if warehouse:
+                try:
+                    ws = WarehouseStock.objects.get(warehouse=warehouse, variant=variant)
+                    if ws.quantity < data['quantity']:
+                        raise serializers.ValidationError(
+                            f"الكمية غير متوفرة للمنتج '{product.name}'. المتاح: {ws.quantity}"
+                        )
+                except WarehouseStock.DoesNotExist:
+                    raise serializers.ValidationError(
+                        f"المنتج '{product.name}' غير متوفر في المخزون."
+                    )
+            else:
+                # fallback لـ variant.stock لو مفيش default warehouse
+                if variant.stock < data['quantity']:
+                    raise serializers.ValidationError(
+                        f"الكمية غير متوفرة للمنتج '{product.name}'. المتاح: {variant.stock}"
+                    )
 
         data['product'] = product
         data['variant'] = variant
@@ -454,25 +492,31 @@ class CheckoutSerializer(serializers.Serializer):
     """
     يستقبل بيانات الـ Checkout كاملة.
     يشتغل لـ User مسجل وـ Guest.
+
+    ✅ التغيير الأساسي:
+    - اتشال الخصم المباشر من warehouse_stocks في create()
+    - الخصم دلوقتي بيحصل بس عند تحويل الأوردر لـ confirmed
+      عن طريق dashboard/signals.py → deduct_warehouse_stock_on_confirm
     """
     # بيانات الشحن
-    shipping_name         = serializers.CharField(max_length=200)
-    shipping_phone        = serializers.CharField(max_length=20)
-    shipping_address      = serializers.CharField(max_length=500)
-    shipping_city         = serializers.CharField(max_length=100)
-    shipping_country      = serializers.CharField(max_length=100)
-    shipping_postal_code  = serializers.CharField(max_length=20, required=False, allow_blank=True)
-    notes                 = serializers.CharField(required=False, allow_blank=True)
-    shipping_cost = serializers.DecimalField(
+    shipping_name        = serializers.CharField(max_length=200)
+    shipping_phone       = serializers.CharField(max_length=20)
+    shipping_address     = serializers.CharField(max_length=500)
+    shipping_city        = serializers.CharField(max_length=100)
+    shipping_country     = serializers.CharField(max_length=100)
+    shipping_postal_code = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    notes                = serializers.CharField(required=False, allow_blank=True)
+    shipping_cost        = serializers.DecimalField(
         max_digits=10, decimal_places=2, required=False, default=0
     )
-    # بيانات الـ Guest (مطلوبة لو مش مسجل)
+
+    # بيانات الـ Guest
     guest_email = serializers.EmailField(required=False, allow_blank=True)
 
     # الدفع
     payment_method = serializers.ChoiceField(choices=[('cod', 'Cash on Delivery')])
 
-    # الكوبون (اختياري)
+    # الكوبون
     coupon_code = serializers.CharField(required=False, allow_blank=True)
 
     # الأيتمز
@@ -496,7 +540,6 @@ class CheckoutSerializer(serializers.Serializer):
 
     def validate(self, data):
         request = self.context.get('request')
-        # لو مش مسجل، الإيميل مطلوب
         if not request or not request.user.is_authenticated:
             if not data.get('guest_email'):
                 raise serializers.ValidationError(
@@ -506,12 +549,12 @@ class CheckoutSerializer(serializers.Serializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        from .models import PaymentProcessorFactory, GuestOrder, OrderCancellation
+        from .models import PaymentProcessorFactory, GuestOrder
         from dashboard.models import Order, OrderItem, Payment
 
-        request  = self.context.get('request')
+        request    = self.context.get('request')
         items_data = validated_data['items']
-        coupon     = validated_data.get('coupon_code')  # بعد الـ validate بقت object
+        coupon     = validated_data.get('coupon_code')
 
         # ── حساب الـ Pricing ──────────────────────────────────
         subtotal = Decimal('0')
@@ -522,10 +565,9 @@ class CheckoutSerializer(serializers.Serializer):
             subtotal += price * item['quantity']
 
         discount_amount = coupon.calculate_discount(subtotal) if coupon else Decimal('0')
-        shipping_cost = validated_data.get('shipping_cost', Decimal('0'))
-        total_price     = subtotal - discount_amount+shipping_cost
+        shipping_cost   = validated_data.get('shipping_cost', Decimal('0'))
+        total_price     = subtotal - discount_amount + shipping_cost
 
-        # لو الكوبون محدد minimum order value
         if coupon and subtotal < coupon.min_order_value:
             raise serializers.ValidationError(
                 f"الحد الأدنى للطلب لاستخدام هذا الكوبون هو {coupon.min_order_value}."
@@ -533,7 +575,6 @@ class CheckoutSerializer(serializers.Serializer):
 
         # ── إنشاء الأوردر ─────────────────────────────────────
         user = request.user if (request and request.user.is_authenticated) else None
-        
 
         order = Order.objects.create(
             user=user,
@@ -577,15 +618,12 @@ class CheckoutSerializer(serializers.Serializer):
                 quantity=item['quantity'],
             )
 
-            # خصم من الـ stock
-            if variant:
-                from django.db.models import F
-                variant.warehouse_stocks.update(
-                    quantity=F('quantity') - item['quantity']
-                )
+            # ✅ لا يوجد خصم من المخزون هنا
+            # الخصم بيحصل من WarehouseStock عند تحويل الأوردر لـ confirmed
+            # في dashboard/signals.py → deduct_warehouse_stock_on_confirm
 
         # ── Payment Processor ──────────────────────────────────
-        processor = PaymentProcessorFactory.get(validated_data['payment_method'])
+        processor      = PaymentProcessorFactory.get(validated_data['payment_method'])
         payment_result = processor.initiate(order)
 
         Payment.objects.create(
@@ -644,11 +682,9 @@ class CreateReviewSerializer(serializers.ModelSerializer):
         request = self.context['request']
         product = self.context['product']
 
-        # مش ينفع يعمل أكتر من review
         if ProductReview.objects.filter(product=product, user=request.user).exists():
             raise serializers.ValidationError("أنت قمت بتقييم هذا المنتج من قبل.")
 
-        # التحقق من إنه اشترى المنتج فعلاً (اختياري للـ verified purchase badge)
         from dashboard.models import OrderItem
         is_verified = OrderItem.objects.filter(
             order__user=request.user,
