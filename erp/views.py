@@ -466,7 +466,16 @@ class RevenueDetailView(RetrieveUpdateDestroyMixin, APIView):
     read_serializer = RevenueSerializer
     queryset_model  = Revenue
 
+class RevenueBulkDeleteView(APIView):
+    permission_classes = [IsStaffOrAdmin]
 
+    def delete(self, request):
+        ids = request.data.get('ids', [])
+        if not ids:
+            return Response({'error': 'ids مطلوبة'}, status=status.HTTP_400_BAD_REQUEST)
+        Revenue.objects.filter(id__in=ids).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
 class FinancialSummaryListView(APIView):
     permission_classes = [IsStaffOrAdmin]
 
