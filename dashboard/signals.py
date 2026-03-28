@@ -188,3 +188,64 @@ def _check_stock_alert_dashboard(variant, current_stock):
 
         alert.last_triggered_at = timezone.now()
         alert.save(update_fields=['last_triggered_at'])
+
+# ─────────────────────────────────────────────
+#  4. إنشاء Revenue في ERP لما الأوردر يتدفع
+# ─────────────────────────────────────────────
+@receiver(pre_save, sender='dashboard.Order')
+def track_payment_status_before_save(sender, instance, **kwargs):
+    """احفظ الـ payment_status القديم قبل الحفظ."""
+    if instance.pk:
+        try:
+            instance._old_payment_status = sender.objects.get(pk=instance.pk).payment_status
+        except sender.DoesNotExist:
+            instance._old_payment_status = None
+    else:
+        instance._old_payment_status = None
+
+
+@receiver(post_save, sender='dashboard.Order')
+def create_erp_revenue_on_payment(sender, instance, **kwargs):
+    """
+    لما الأوردر يتحول لـ paid → نعمل Revenue record في ERP تلقائياً.
+    لو اترفاند → نحذف الـ Revenue أو نعمل record سالب.
+    """
+    from django.utils import timezone
+    from erp.models import Revenue
+
+    old_payment_status = getattr(instance, '_old_payment_status', None)
+
+    # مفيش تغيير في الـ payment_status
+    if old_payment_status == instance.payment_status:
+        return
+
+    # ── لما يتدفع ────────────────────────────────────────────
+    if instance.payment_status == 'paid':
+        Revenue.objects.update_or_create(
+            # نستخدم description كـ unique identifier لتجنب التكرار
+            description=f"Online Order: {instance.order_number}",
+            defaults={
+                'source': 'sale',
+                'amount': instance.total_price,
+                'currency': 'EGP',
+                'date': instance.updated_at.date() if instance.updated_at else timezone.now().date(),
+                'description': f"Online Order: {instance.order_number} — {instance.shipping_name}",
+            }
+        )
+
+    # ── لما يترفاند ───────────────────────────────────────────
+    elif instance.payment_status == 'refunded':
+        # احذف الـ Revenue الأصلي
+        Revenue.objects.filter(
+            description__contains=instance.order_number,
+            source='sale',
+        ).delete()
+
+        # واعمل record سالب كـ audit trail
+        Revenue.objects.create(
+            source='other',
+            amount=-instance.total_price,
+            currency='EGP',
+            date=timezone.now().date(),
+            description=f"Refund: {instance.order_number} — {instance.shipping_name}",
+        )
