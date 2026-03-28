@@ -271,6 +271,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     effective_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     is_low_stock    = serializers.BooleanField(read_only=True)
     is_out_of_stock = serializers.BooleanField(read_only=True)
+    initial_stock   = serializers.IntegerField(write_only=True, required=False, default=0)  # ← جديد
 
     class Meta:
         model  = ProductVariant
@@ -280,9 +281,43 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             'price_override', 'effective_price',
             'stock', 'sku', 'image',
             'is_active', 'is_low_stock', 'is_out_of_stock',
+            'initial_stock',  # ← جديد
         ]
         read_only_fields = ['product']
 
+    def create(self, validated_data):
+        initial_stock = validated_data.pop('initial_stock', 0)
+        variant = super().create(validated_data)
+
+        # ✅ احفظ الـ stock في WarehouseStock
+        from erp.models import Warehouse, WarehouseStock
+        warehouse = Warehouse.objects.filter(is_default=True).first()
+        if warehouse:
+            WarehouseStock.objects.get_or_create(
+                warehouse=warehouse,
+                variant=variant,
+                defaults={'quantity': initial_stock}
+            )
+        return variant
+
+    def update(self, instance, validated_data):
+        initial_stock = validated_data.pop('initial_stock', None)
+        variant = super().update(instance, validated_data)
+
+        # ✅ لو بعت stock في الـ update، حدّث WarehouseStock
+        if initial_stock is not None:
+            from erp.models import Warehouse, WarehouseStock
+            warehouse = Warehouse.objects.filter(is_default=True).first()
+            if warehouse:
+                ws, created = WarehouseStock.objects.get_or_create(
+                    warehouse=warehouse,
+                    variant=variant,
+                    defaults={'quantity': initial_stock}
+                )
+                if not created:
+                    ws.quantity = initial_stock
+                    ws.save()
+        return variant
 
 class ProductListSerializer(serializers.ModelSerializer):
     """Lightweight – used in tables/lists."""
