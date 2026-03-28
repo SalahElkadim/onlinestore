@@ -236,6 +236,7 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
 # ============================================================
 class CartItemSerializer(serializers.ModelSerializer):
     product_name    = serializers.CharField(source='product.name', read_only=True)
+    cart_id  = serializers.IntegerField(required=False, allow_null=True)
     variant_label   = serializers.SerializerMethodField()
     unit_price      = serializers.SerializerMethodField()  # ← غيّر لـ SerializerMethodField
     subtotal        = serializers.SerializerMethodField()  # ← غيّر لـ SerializerMethodField

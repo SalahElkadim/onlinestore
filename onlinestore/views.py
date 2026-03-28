@@ -38,25 +38,19 @@ class StandardResponseMixin:
 
 
 class CartMixin:
-    """يجيب الـ Cart الحالية (للـ User أو الـ Guest)."""
-
-    def get_cart(self, request):
+    def get_cart(self, request, cart_id=None):
         if request.user.is_authenticated:
-            # يوزر مسجل → Cart مرتبطة بالـ user
             cart, _ = Cart.objects.get_or_create(user=request.user)
-        else:
-            # Guest → Cart مرتبطة بالـ session
-            # لو الـ session مفيهاش key، اعمل واحدة وحفظها
-            if not request.session.session_key:
-                request.session.create()
-                request.session.save()
+            return cart
 
-            session_key = request.session.session_key
-            cart, _ = Cart.objects.get_or_create(
-                session_key=session_key,
-                defaults={'user': None}
-            )
-        return cart
+        # Guest
+        if cart_id:
+            try:
+                return Cart.objects.get(id=cart_id, user=None)
+            except Cart.DoesNotExist:
+                pass
+
+        return Cart.objects.create()
 
 
 # ============================================================
@@ -217,7 +211,8 @@ class CartView(StandardResponseMixin, CartMixin, APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        cart = self.get_cart(request)
+        cart_id = request.query_params.get('cart_id')
+        cart = self.get_cart(request, cart_id=int(cart_id) if cart_id else None)
         return self.success(CartSerializer(cart).data)
 
 
@@ -228,8 +223,7 @@ class AddToCartView(StandardResponseMixin, CartMixin, APIView):
         serializer = AddToCartSerializer(data=request.data)
         if not serializer.is_valid():
             return self.error('بيانات غير صحيحة.', serializer.errors)
-
-        cart    = self.get_cart(request)
+        cart = self.get_cart(request, cart_id=serializer.validated_data.get('cart_id'))
         product = serializer.validated_data['product']
         variant = serializer.validated_data['variant']
         qty     = serializer.validated_data['quantity']
