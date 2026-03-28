@@ -300,6 +300,7 @@ class AddToCartSerializer(serializers.Serializer):
     product_id  = serializers.IntegerField()
     variant_id  = serializers.IntegerField(required=False, allow_null=True)
     quantity    = serializers.IntegerField(min_value=1, default=1)
+    cart_id  = serializers.IntegerField(required=False, allow_null=True)
 
     def validate(self, data):
         try:
