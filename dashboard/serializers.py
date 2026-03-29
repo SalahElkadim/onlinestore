@@ -289,11 +289,10 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         initial_stock = validated_data.pop('initial_stock', 0)
         variant = super().create(validated_data)
 
-        # ✅ احفظ الـ stock في WarehouseStock
         from erp.models import Warehouse, WarehouseStock
         warehouse = Warehouse.objects.filter(is_default=True).first()
         if warehouse:
-            WarehouseStock.objects.get_or_create(
+            WarehouseStock.objects.update_or_create(  # ← بدّل get_or_create
                 warehouse=warehouse,
                 variant=variant,
                 defaults={'quantity': initial_stock}
