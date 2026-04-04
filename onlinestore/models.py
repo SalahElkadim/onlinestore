@@ -99,7 +99,7 @@ class GuestOrder(models.Model):
         related_name='guest_info'
     )
     name       = models.CharField(max_length=200)
-    email      = models.EmailField()
+    email = models.EmailField(null=True, blank=True)
     phone      = models.CharField(max_length=20)
 
     def __str__(self):
