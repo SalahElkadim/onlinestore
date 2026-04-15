@@ -465,3 +465,33 @@ class ValidateCouponView(StandardResponseMixin, APIView):
                 'value':         data['coupon'].value,
             }
         })
+    
+# store/views.py
+
+from django.db.models import Count
+
+class FindVariantView(StandardResponseMixin, APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, slug):
+        product = get_object_or_404(
+            Product, slug=slug, status=Product.Status.ACTIVE
+        )
+        av_ids = request.data.get('attribute_value_ids', [])
+        if not av_ids:
+            return self.error('ابعت attribute_value_ids.')
+
+        # لاقي الـ variant اللي عنده كل القيم دي بالظبط
+        variants = product.variants.filter(is_active=True)
+        for av_id in av_ids:
+            variants = variants.filter(attribute_values__id=av_id)
+
+        variant = variants.annotate(
+            av_count=Count('attribute_values')
+        ).filter(av_count=len(av_ids)).first()
+
+        if not variant:
+            return self.error('الـ variant ده مش موجود أو نفد.')
+
+        from dashboard.serializers import ProductVariantSerializer
+        return self.success(ProductVariantSerializer(variant).data)

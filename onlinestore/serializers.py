@@ -202,6 +202,8 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
     reviews_count       = serializers.SerializerMethodField()
     reviews             = serializers.SerializerMethodField()
     videos              = ProductVideoSerializer(many=True, read_only=True)
+    available_attributes = serializers.SerializerMethodField()  
+
 
     class Meta:
         model  = Product
@@ -213,7 +215,7 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
             'is_in_stock', 'total_stock',
             'avg_rating', 'reviews_count', 'reviews',
             'created_at',
-            'videos',
+            'videos','available_attributes',
         ]
 
     def get_avg_rating(self, obj):
@@ -221,6 +223,25 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
         result = obj.reviews.filter(is_approved=True).aggregate(avg=Avg('rating'))
         avg = result['avg']
         return round(avg, 1) if avg else None
+    
+    
+    
+    def get_available_attributes(self, obj):
+        result = {}
+        for variant in obj.variants.filter(is_active=True):
+            for av in variant.attribute_values.select_related('attribute').all():
+                attr_name = av.attribute.name
+                if attr_name not in result:
+                    result[attr_name] = []
+                if not any(v['id'] == av.id for v in result[attr_name]):
+                    result[attr_name].append({
+                        'id': av.id,
+                        'value': av.value
+                    })
+        return [
+            {'attribute': attr, 'values': values}
+            for attr, values in result.items()]
+        
 
     def get_reviews_count(self, obj):
         return obj.reviews.filter(is_approved=True).count()
@@ -228,6 +249,7 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
     def get_reviews(self, obj):
         reviews = obj.reviews.filter(is_approved=True).order_by('-created_at')[:10]
         return ProductReviewSerializer(reviews, many=True).data
+    
 
 
 # ============================================================

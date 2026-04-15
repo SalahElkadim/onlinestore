@@ -10,7 +10,7 @@ from .views import (
     CategoryListView,
 
     # Products
-    ProductListView, ProductDetailView,
+    ProductListView, ProductDetailView, FindVariantView,
 
     # Cart
     CartView, AddToCartView, UpdateCartItemView, ClearCartView,
@@ -103,4 +103,6 @@ urlpatterns = [
     # POST /api/store/coupons/validate/
     # ──────────────────────────────────────────────────────────
     path('coupons/validate/', ValidateCouponView.as_view(), name='coupon_validate'),
+    # store/urls.py — أضف السطر ده
+path('products/<slug:slug>/find-variant/', FindVariantView.as_view()),
 ]
