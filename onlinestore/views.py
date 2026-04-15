@@ -470,6 +470,7 @@ class ValidateCouponView(StandardResponseMixin, APIView):
 
 from django.db.models import Count
 
+
 class FindVariantView(StandardResponseMixin, APIView):
     permission_classes = [AllowAny]
 
@@ -477,21 +478,50 @@ class FindVariantView(StandardResponseMixin, APIView):
         product = get_object_or_404(
             Product, slug=slug, status=Product.Status.ACTIVE
         )
+
         av_ids = request.data.get('attribute_value_ids', [])
+
         if not av_ids:
             return self.error('ابعت attribute_value_ids.')
 
-        # لاقي الـ variant اللي عنده كل القيم دي بالظبط
+        # ── تحقق من صحة الـ input ──────────────────────────────
+        if not isinstance(av_ids, list):
+            return self.error('attribute_value_ids لازم تكون list.')
+
+        try:
+            av_ids = [int(x) for x in av_ids]
+        except (ValueError, TypeError):
+            return self.error('attribute_value_ids لازم تحتوي على أرقام صحيحة فقط.')
+
+        if len(av_ids) == 0:
+            return self.error('attribute_value_ids فارغة.')
+
+        # ── دور على الـ variant ────────────────────────────────
+        # نبدأ بكل الـ variants النشطة للمنتج ده
         variants = product.variants.filter(is_active=True)
+
+        # نضيق النتائج: كل av_id لازم يكون موجود في الـ variant
         for av_id in av_ids:
             variants = variants.filter(attribute_values__id=av_id)
 
-        variant = variants.annotate(
-            av_count=Count('attribute_values')
-        ).filter(av_count=len(av_ids)).first()
+        # ✅ distinct=True هو الحل الأساسي:
+        # لما بنعمل filter في loop، SQL بيعمل JOIN مرتين على نفس الجدول
+        # ده بيخلي COUNT يرجع رقم مضاعف → الـ filter بيفشل
+        # distinct=True بيحسب كل attribute_value مرة واحدة بس
+        variant = (
+            variants
+            .annotate(av_count=Count('attribute_values', distinct=True))
+            .filter(av_count=len(av_ids))
+            .prefetch_related('attribute_values')
+            .first()
+        )
 
         if not variant:
-            return self.error('الـ variant ده مش موجود أو نفد.')
+            return self.error('هذا التوليف غير متاح حالياً.')
+
+        # ── تحقق إضافي من المخزون ─────────────────────────────
+        if variant.is_out_of_stock:
+            return self.error('هذا المنتج نفد من المخزون.')
 
         from dashboard.serializers import ProductVariantSerializer
         return self.success(ProductVariantSerializer(variant).data)
