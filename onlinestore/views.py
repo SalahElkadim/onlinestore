@@ -470,7 +470,6 @@ class ValidateCouponView(StandardResponseMixin, APIView):
 
 from django.db.models import Count
 
-
 class FindVariantView(StandardResponseMixin, APIView):
     permission_classes = [AllowAny]
 
@@ -484,7 +483,6 @@ class FindVariantView(StandardResponseMixin, APIView):
         if not av_ids:
             return self.error('ابعت attribute_value_ids.')
 
-        # ── تحقق من صحة الـ input ──────────────────────────────
         if not isinstance(av_ids, list):
             return self.error('attribute_value_ids لازم تكون list.')
 
@@ -497,31 +495,45 @@ class FindVariantView(StandardResponseMixin, APIView):
             return self.error('attribute_value_ids فارغة.')
 
         # ── دور على الـ variant ────────────────────────────────
-        # نبدأ بكل الـ variants النشطة للمنتج ده
-        variants = product.variants.filter(is_active=True)
+        # بدون اشتراط is_active لأن المخزون بيتحسب على مستوى المنتج
+        variants = product.variants.all()
 
-        # نضيق النتائج: كل av_id لازم يكون موجود في الـ variant
         for av_id in av_ids:
             variants = variants.filter(attribute_values__id=av_id)
 
-        # ✅ distinct=True هو الحل الأساسي:
-        # لما بنعمل filter في loop، SQL بيعمل JOIN مرتين على نفس الجدول
-        # ده بيخلي COUNT يرجع رقم مضاعف → الـ filter بيفشل
-        # distinct=True بيحسب كل attribute_value مرة واحدة بس
         variant = (
             variants
             .annotate(av_count=Count('attribute_values', distinct=True))
-            .filter(av_count=len(av_ids))
+            .filter(av_count=len(av_ids))   # ← exact match عشان مش يتلخبط
             .prefetch_related('attribute_values')
             .first()
         )
 
+        # لو مش لاقيه بـ exact match، دور بـ subset (partial match)
+        if not variant:
+            variants_fallback = product.variants.all()
+            for av_id in av_ids:
+                variants_fallback = variants_fallback.filter(attribute_values__id=av_id)
+            variant = variants_fallback.prefetch_related('attribute_values').first()
+
         if not variant:
             return self.error('هذا التوليف غير متاح حالياً.')
 
-        # ── تحقق إضافي من المخزون ─────────────────────────────
-        if variant.is_out_of_stock:
-            return self.error('هذا المنتج نفد من المخزون.')
+        # ── تحقق من المخزون من WarehouseStock ─────────────────
+        from erp.models import WarehouseStock, Warehouse
+        warehouse = Warehouse.objects.filter(is_default=True).first()
+
+        if warehouse:
+            ws = WarehouseStock.objects.filter(
+                warehouse=warehouse, variant=variant
+            ).first()
+            # لو مفيش record في WarehouseStock خالص → اعتمد على product stock
+            if ws and ws.quantity <= 0:
+                return self.error('هذا المنتج نفد من المخزون.')
+        else:
+            # fallback: لو مفيش default warehouse اعتمد على product
+            if not product.is_in_stock:
+                return self.error('هذا المنتج نفد من المخزون.')
 
         from dashboard.serializers import ProductVariantSerializer
         return self.success(ProductVariantSerializer(variant).data)
