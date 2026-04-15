@@ -547,13 +547,6 @@ class CheckoutSerializer(serializers.Serializer):
         except Coupon.DoesNotExist:
             raise serializers.ValidationError("كود الكوبون غير صحيح.")
 
-    def validate(self, data):
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            if not data.get('guest_email'):
-                raise serializers.ValidationError(
-                    {"guest_email": "الإيميل مطلوب للطلب بدون تسجيل."}
-                )
         return data
 
     @transaction.atomic
