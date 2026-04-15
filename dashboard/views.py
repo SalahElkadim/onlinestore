@@ -1023,3 +1023,75 @@ class AnalyticsView(StandardResponseMixin, APIView):
             'revenue_by_category': list(by_category),
         })
     
+from itertools import product as cartesian_product
+
+class GenerateVariantsView(StandardResponseMixin, APIView):
+    """
+    POST /api/admin/products/{pk}/generate-variants/
+    body: {
+      "attribute_groups": [[1, 2, 3], [5, 6], [10]],  # av_ids per attribute
+      "default_stock": 0
+    }
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, pk):
+        product = get_object_or_404(Product, pk=pk)
+        groups = request.data.get('attribute_groups', [])
+        default_stock = int(request.data.get('default_stock', 0))
+
+        if not groups or not all(isinstance(g, list) and len(g) > 0 for g in groups):
+            return self.error('attribute_groups لازم تكون list of lists غير فارغة.')
+
+        # Validate all IDs exist
+        all_ids = [id for group in groups for id in group]
+        av_objects = {
+            av.id: av
+            for av in AttributeValue.objects.filter(id__in=all_ids)
+        }
+        for id in all_ids:
+            if id not in av_objects:
+                return self.error(f'AttributeValue #{id} غير موجود.')
+
+        # Generate Cartesian product
+        combinations = list(cartesian_product(*groups))
+
+        created = []
+        skipped = 0
+
+        for combo in combinations:
+            # Check if variant with exact these values already exists
+            from django.db.models import Count as DCount
+            existing = product.variants.annotate(
+                av_count=DCount('attribute_values', distinct=True)
+            ).filter(av_count=len(combo))
+            for av_id in combo:
+                existing = existing.filter(attribute_values__id=av_id)
+
+            if existing.exists():
+                skipped += 1
+                continue
+
+            variant = ProductVariant.objects.create(
+                product=product,
+                is_active=True,
+            )
+            variant.attribute_values.set(combo)
+
+            # Create WarehouseStock
+            from erp.models import Warehouse, WarehouseStock
+            warehouse = Warehouse.objects.filter(is_default=True).first()
+            if warehouse:
+                WarehouseStock.objects.create(
+                    warehouse=warehouse,
+                    variant=variant,
+                    quantity=default_stock,
+                )
+
+            created.append(variant)
+
+        return self.success({
+            'created': len(created),
+            'skipped': skipped,
+            'variants': ProductVariantSerializer(created, many=True).data,
+        }, f'تم إنشاء {len(created)} variant بنجاح.')

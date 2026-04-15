@@ -21,7 +21,7 @@ from .views import (
     ProductListView, ProductDetailView, ProductImageView,
     ProductVariantListView, ProductVariantDetailView, UpdateVariantStockView,
     AttributeListView, AttributeValueListView,AttributeListView, AttributeDetailView,
-    AttributeValueListView, AttributeValueDetailView,
+    AttributeValueListView, AttributeValueDetailView, GenerateVariantsView,
 
     # Orders
     OrderListView, OrderDetailView, UpdateOrderStatusView,
@@ -200,4 +200,5 @@ urlpatterns = [
          AttributeValueListView.as_view(),  name='attribute_value_list'),
     path('attributes/<int:pk>/values/<int:value_pk>/',
          AttributeValueDetailView.as_view(), name='attribute_value_detail'),
+         path('products/<int:pk>/generate-variants/', GenerateVariantsView.as_view()),
 ]
