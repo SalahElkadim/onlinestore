@@ -209,6 +209,9 @@ CORS_PREFLIGHT_MAX_AGE = 86400
 # Custom user model
 AUTH_USER_MODEL = 'dashboard.User'
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://onlinestore-production-d7b2.up.railway.app"
+]
 # ============================================================
 # CACHING
 # ============================================================
