@@ -605,8 +605,9 @@ class UpdateVariantStockView(StandardResponseMixin, APIView):
         old_stock = variant.stock
         new_stock = int(new_stock)
 
-        # ✅ حدّث WarehouseStock مباشرة
         warehouse = Warehouse.objects.filter(is_default=True).first()
+        actual_new_stock = 0
+
         if warehouse:
             stock_obj, created = WarehouseStock.objects.get_or_create(
                 variant=variant,
@@ -617,14 +618,15 @@ class UpdateVariantStockView(StandardResponseMixin, APIView):
                 stock_obj.quantity = new_stock
                 stock_obj.save()
 
-        # Notify if low or out
-        if variant.is_out_of_stock:
+            actual_new_stock = stock_obj.quantity  # ✅ أسهل من query تانية
+
+        if actual_new_stock == 0:
             create_notification('out_of_stock', f'"{variant.product.name}" is out of stock!')
-        elif variant.is_low_stock:
-            create_notification('low_stock', f'"{variant.product.name}" stock is low ({variant.stock} left).')
+        elif actual_new_stock <= 5:
+            create_notification('low_stock', f'"{variant.product.name}" stock is low ({actual_new_stock} left).')
 
         log_activity(request, 'update', 'ProductVariant', variant)
-        return self.success({'old_stock': old_stock, 'new_stock': variant.stock}, 'Stock updated.')
+        return self.success({'old_stock': old_stock, 'new_stock': actual_new_stock}, 'Stock updated.')
 
 # ── Attributes ────────────────────────────────────────────────
 
