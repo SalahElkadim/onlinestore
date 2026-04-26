@@ -58,7 +58,7 @@ urlpatterns = [
     # GET /api/store/products/{slug}/
     # ──────────────────────────────────────────────────────────
     path('products/',             ProductListView.as_view(),   name='product_list'),
-    path('products/<slug:slug>/', ProductDetailView.as_view(), name='product_detail'),
+    path('products/<str:slug>/', ProductDetailView.as_view(), name='product_detail'),
 
     # ──────────────────────────────────────────────────────────
     # CART
