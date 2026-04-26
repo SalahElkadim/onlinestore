@@ -91,11 +91,11 @@ urlpatterns = [
     # POST /api/store/products/{slug}/reviews/
     # DELETE /api/store/products/{slug}/reviews/{id}/
     # ──────────────────────────────────────────────────────────
-    path('products/<slug:slug>/reviews/',
+    path('products/<str:slug>/reviews/',
          ProductReviewListView.as_view(), name='product_reviews'),
-    path('products/<slug:slug>/reviews/add/',
+    path('products/<str:slug>/reviews/add/',
          CreateReviewView.as_view(),      name='add_review'),
-    path('products/<slug:slug>/reviews/<int:review_id>/delete/',
+    path('products/<str:slug>/reviews/<int:review_id>/delete/',
          DeleteReviewView.as_view(),      name='delete_review'),
 
     # ──────────────────────────────────────────────────────────
@@ -104,5 +104,5 @@ urlpatterns = [
     # ──────────────────────────────────────────────────────────
     path('coupons/validate/', ValidateCouponView.as_view(), name='coupon_validate'),
     # store/urls.py — أضف السطر ده
-path('products/<slug:slug>/find-variant/', FindVariantView.as_view()),
+path('products/<str:slug>/find-variant/', FindVariantView.as_view()),
 ]
