@@ -3,7 +3,6 @@ from django.db import models
 from django.utils.text import slugify
 import uuid
 
-
 # ============================================================
 # 1. USER MODEL
 # ============================================================
@@ -74,7 +73,7 @@ class StaffProfile(models.Model):
 
 class Category(models.Model):
     name       = models.CharField(max_length=200)
-    slug       = models.SlugField(max_length=220, unique=True, blank=True)
+    slug       = models.SlugField(max_length=220, unique=True, blank=True, allow_unicode=True)
     parent     = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
@@ -91,7 +90,9 @@ class Category(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            base_slug = slugify(self.name)
+            base_slug = slugify(self.name, allow_unicode=True)
+            if not base_slug:
+                base_slug = str(uuid.uuid4())[:8]
             slug = base_slug
             counter = 1
             while Category.objects.filter(slug=slug).exclude(pk=self.pk).exists():
@@ -108,7 +109,6 @@ class Category(models.Model):
         return self.parent is None
 
     def get_all_children(self):
-        """Recursively returns all subcategory IDs."""
         children = list(self.children.all())
         result = []
         for child in children:
@@ -141,7 +141,9 @@ class Product(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            base_slug = slugify(self.name)
+            base_slug = slugify(self.name, allow_unicode=True)  # ✅ يدعم العربي
+            if not base_slug:  # لو لسه فاضي
+                base_slug = str(uuid.uuid4())[:8]
             slug = base_slug
             counter = 1
             while Product.objects.filter(slug=slug).exclude(pk=self.pk).exists():
