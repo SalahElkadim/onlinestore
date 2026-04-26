@@ -126,7 +126,7 @@ class Product(models.Model):
         ARCHIVED = 'archived', 'Archived'
 
     name           = models.CharField(max_length=300)
-    slug           = models.SlugField(max_length=320, unique=True, blank=True)
+    slug           = models.SlugField(max_length=320, unique=True, blank=True, allow_unicode=True)
     description    = models.TextField(blank=True)
     price          = models.DecimalField(max_digits=10, decimal_places=2)
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -141,8 +141,8 @@ class Product(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            base_slug = slugify(self.name, allow_unicode=True)  # ✅ يدعم العربي
-            if not base_slug:  # لو لسه فاضي
+            base_slug = slugify(self.name, allow_unicode=True)
+            if not base_slug:
                 base_slug = str(uuid.uuid4())[:8]
             slug = base_slug
             counter = 1
