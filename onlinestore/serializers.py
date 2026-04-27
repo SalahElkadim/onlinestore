@@ -259,6 +259,7 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
 class CartItemSerializer(serializers.ModelSerializer):
     product_name    = serializers.CharField(source='product.name', read_only=True)
     variant_label   = serializers.SerializerMethodField()
+    variant_image   = serializers.SerializerMethodField()  # ✅ جديد
     unit_price      = serializers.SerializerMethodField()
     subtotal        = serializers.SerializerMethodField()
     primary_image   = serializers.SerializerMethodField()
@@ -269,7 +270,7 @@ class CartItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'product', 'product_name',
             'variant', 'variant_label',
-            'quantity',
+            'quantity',   'variant_image',   # ✅ جديد
             'unit_price', 'subtotal',
             'primary_image', 'is_out_of_stock',
         ]
@@ -297,7 +298,24 @@ class CartItemSerializer(serializers.ModelSerializer):
         if obj.variant:
             return obj.variant.is_out_of_stock
         return not obj.product.is_in_stock
+    
+    def get_variant_image(self, obj):
+            """
+            بنجيب الصورة المرتبطة بأي attribute_value من الـ variant
+            """
+            if not obj.variant:
+                return None
 
+            # جيب كل الـ attribute_value ids بتاعت الـ variant
+            av_ids = obj.variant.attribute_values.values_list('id', flat=True)
+
+            # دور على صورة عندها attribute_value من دول
+            img = obj.product.images.filter(attribute_value__in=av_ids).first()
+
+            if not img:
+                return None
+
+            return img.image.build_url() if hasattr(img.image, 'build_url') else img.image.url
 
 class CartSerializer(serializers.ModelSerializer):
     items       = CartItemSerializer(many=True, read_only=True)
