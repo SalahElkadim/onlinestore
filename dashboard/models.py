@@ -176,17 +176,23 @@ class Product(models.Model):
 from cloudinary.models import CloudinaryField
 
 class ProductImage(models.Model):
-    product    = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
-    image = CloudinaryField('image', folder='products/')
-    alt_text   = models.CharField(max_length=200, blank=True)
-    is_primary = models.BooleanField(default=False)
-    order      = models.PositiveIntegerField(default=0)
+    product         = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
+    image           = CloudinaryField('image', folder='products/')
+    alt_text        = models.CharField(max_length=200, blank=True)
+    is_primary      = models.BooleanField(default=False)
+    order           = models.PositiveIntegerField(default=0)
+
+    # ✦ جديد — ربط الصورة بقيمة الخاصية (اللون مثلاً)
+    attribute_value = models.ForeignKey(
+        'AttributeValue',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='images',
+    )
 
     class Meta:
         ordering = ['order']
-
-    def __str__(self):
-        return f"Image for {self.product.name} ({'Primary' if self.is_primary else 'Secondary'})"
     
 class ProductVideo(models.Model):
     product    = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='videos')

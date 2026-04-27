@@ -259,7 +259,11 @@ class AttributeSerializer(serializers.ModelSerializer):
 class ProductImageSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ProductImage
-        fields = ['id', 'image', 'alt_text', 'is_primary', 'order']
+        fields = [
+            'id', 'image', 'alt_text',
+            'is_primary', 'order',
+            'attribute_value',   # ✦ جديد
+        ]
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
@@ -363,11 +367,18 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['slug', 'created_at', 'updated_at']
 
+class ProductImageInputSerializer(serializers.Serializer):
+    """مساعد داخلي لاستقبال بيانات الصورة مع attribute_value."""
+    url             = serializers.CharField()
+    attribute_value = serializers.PrimaryKeyRelatedField(
+        queryset=AttributeValue.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
 class ProductWriteSerializer(serializers.ModelSerializer):
-    """Create / Update product."""
-    uploaded_images = serializers.ListField(
-        child=serializers.CharField(), write_only=True, required=False)
+    # ✦ بدل List[str] → List[{url, attribute_value?}]
+    uploaded_images = ProductImageInputSerializer(many=True, write_only=True, required=False)
     uploaded_videos = serializers.ListField(
         child=serializers.CharField(), write_only=True, required=False
     )
@@ -382,47 +393,50 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             'uploaded_videos',
         ]
 
-    def validate_discount_price(self, value):
-        price = self.initial_data.get('price') or (self.instance.price if self.instance else None)
-        if price and value and float(value) >= float(price):
-            raise serializers.ValidationError("Discount price must be less than the original price.")
-        return value
-
     def create(self, validated_data):
         images_data = validated_data.pop('uploaded_images', [])
         videos_data = validated_data.pop('uploaded_videos', [])
         product = Product.objects.create(**validated_data)
-        for i, url in enumerate(images_data):
+
+        for i, img_data in enumerate(images_data):
             ProductImage.objects.create(
-                product=product,
-                image=url,
-                is_primary=(i == 0),
-                order=i
+                product         = product,
+                image           = img_data['url'],
+                is_primary      = (i == 0),
+                order           = i,
+                attribute_value = img_data.get('attribute_value'),  # ✦
             )
+
         for i, url in enumerate(videos_data):
-            ProductVideo.objects.create(
-                product=product,
-                video=url,
-                order=i
-            )
+            ProductVideo.objects.create(product=product, video=url, order=i)
+
         return product
 
     def update(self, instance, validated_data):
         images_data = validated_data.pop('uploaded_images', [])
         videos_data = validated_data.pop('uploaded_videos', [])
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        if images_data:
-            for i, img in enumerate(images_data):
-                ProductImage.objects.create(
-                    product=instance, image=img,
-                    is_primary=False, order=instance.images.count() + i
-                )
-        for i, vid in enumerate(videos_data):
-            ProductVideo.objects.create(product=instance, video=vid, order=instance.videos.count() + i)
-        return instance
 
+        if images_data:
+            for i, img_data in enumerate(images_data):
+                ProductImage.objects.create(
+                    product         = instance,
+                    image           = img_data['url'],
+                    is_primary      = False,
+                    order           = instance.images.count() + i,
+                    attribute_value = img_data.get('attribute_value'),  # ✦
+                )
+
+        for i, vid in enumerate(videos_data):
+            ProductVideo.objects.create(
+                product=instance, video=vid,
+                order=instance.videos.count() + i
+            )
+
+        return instance
 
 # ============================================================
 # 5. COUPON SERIALIZERS
