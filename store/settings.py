@@ -22,7 +22,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 #DEBUG = os.getenv('DEBUG', 'False') == 'True'
-DEBUG = True
+DEBUG = False
 ALLOWED_HOSTS = os.getenv(
     'ALLOWED_HOSTS', 
     'localhost,127.0.0.1,onlinestore-production-d7b2.up.railway.app'
