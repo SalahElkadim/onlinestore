@@ -241,10 +241,11 @@ class CategoryWriteSerializer(serializers.ModelSerializer):
 
 class AttributeValueSerializer(serializers.ModelSerializer):
     attribute_name = serializers.CharField(source='attribute.name', read_only=True)
+    images_count   = serializers.IntegerField(source='images.count', read_only=True)  # ✦ جديد
 
     class Meta:
         model  = AttributeValue
-        fields = ['id', 'attribute', 'attribute_name', 'value']
+        fields = ['id', 'attribute', 'attribute_name', 'value','images_count']
         read_only_fields = ['attribute', 'attribute_name']
 
 
