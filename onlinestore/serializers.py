@@ -618,7 +618,7 @@ class CheckoutSerializer(serializers.Serializer):
             GuestOrder.objects.create(
                 order=order,
                 name=validated_data['shipping_name'],
-                email=validated_data['guest_email'],
+                email=validated_data.get('guest_email', ''),
                 phone=validated_data['shipping_phone'],
             )
 
