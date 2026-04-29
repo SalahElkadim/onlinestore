@@ -22,7 +22,7 @@ from .views import (
     ProductVariantListView, ProductVariantDetailView, UpdateVariantStockView,
     AttributeListView, AttributeValueListView,AttributeListView, AttributeDetailView,
     AttributeValueListView, AttributeValueDetailView, GenerateVariantsView,
-
+DeleteOrderView,
     # Orders
     OrderListView, OrderDetailView, UpdateOrderStatusView,
     OrderStatsView, ExportOrdersView,
@@ -201,4 +201,6 @@ urlpatterns = [
     path('attributes/<int:pk>/values/<int:value_pk>/',
          AttributeValueDetailView.as_view(), name='attribute_value_detail'),
          path('products/<int:pk>/generate-variants/', GenerateVariantsView.as_view()),
+         path('orders/<int:pk>/delete/', DeleteOrderView.as_view()),
+
 ]

@@ -1097,3 +1097,13 @@ class GenerateVariantsView(StandardResponseMixin, APIView):
             'skipped': skipped,
             'variants': ProductVariantSerializer(created, many=True).data,
         }, f'تم إنشاء {len(created)} variant بنجاح.')
+    
+class DeleteOrderView(StandardResponseMixin, APIView):
+    permission_classes = [IsAdminOnly]
+
+    def delete(self, request, pk):
+        order = get_object_or_404(Order, pk=pk)
+        order_number = order.order_number
+        log_activity(request, 'delete', 'Order', order)
+        order.delete()
+        return self.success(message=f'Order #{order_number} deleted successfully.')
