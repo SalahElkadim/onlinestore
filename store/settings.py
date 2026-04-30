@@ -209,6 +209,10 @@ CORS_PREFLIGHT_MAX_AGE = 86400
 # Custom user model
 AUTH_USER_MODEL = 'dashboard.User'
 
+
+ONESIGNAL_APP_ID  = os.getenv('ONESIGNAL_APP_ID')   
+ONESIGNAL_API_KEY = os.getenv('ONESIGNAL_API_KEY')   
+
 CSRF_TRUSTED_ORIGINS = [
     "https://onlinestore-production-d7b2.up.railway.app"
 ]

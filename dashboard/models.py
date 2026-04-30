@@ -476,3 +476,37 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.admin} {self.action} {self.model_name} #{self.object_id}"
+    
+
+"""
+─────────────────────────────────────────────────────────────────
+ADD THIS CLASS TO THE BOTTOM OF dashboard/models.py
+─────────────────────────────────────────────────────────────────
+Then run:
+    python manage.py makemigrations dashboard
+    python manage.py migrate
+─────────────────────────────────────────────────────────────────
+"""
+
+class AdminPushDevice(models.Model):
+    """
+    Stores a OneSignal player_id for each admin/staff browser session.
+    One user can have multiple devices (desktop + mobile + different browsers).
+    """
+    user      = models.ForeignKey(
+        "User",
+        on_delete=models.CASCADE,
+        related_name="push_devices",
+    )
+    player_id = models.CharField(max_length=200, unique=True)
+    device_info = models.CharField(max_length=300, blank=True)   # user-agent snippet
+    is_active   = models.BooleanField(default=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Admin Push Device"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email} – {self.player_id[:16]}…"

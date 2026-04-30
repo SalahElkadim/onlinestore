@@ -2,7 +2,7 @@
 
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-
+from . import push_views
 from .views import (
     # Auth
     AdminLoginView, AdminLogoutView, ChangePasswordView, MeView,
@@ -202,5 +202,7 @@ urlpatterns = [
          AttributeValueDetailView.as_view(), name='attribute_value_detail'),
          path('products/<int:pk>/generate-variants/', GenerateVariantsView.as_view()),
          path('orders/<int:pk>/delete/', DeleteOrderView.as_view()),
+         path("push/register/",   push_views.RegisterPushDeviceView.as_view(),   name="push-register"),
+    path("push/unregister/", push_views.UnregisterPushDeviceView.as_view(), name="push-unregister")
 
 ]
