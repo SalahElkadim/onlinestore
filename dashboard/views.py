@@ -1106,4 +1106,4 @@ class DeleteOrderView(StandardResponseMixin, APIView):
         order_number = order.order_number
         log_activity(request, 'delete', 'Order', order)
         order.delete()
-        return self.success(message=f'Order #{order_number} deleted successfully.')
+        return self.success(message=f'Order #{order_number} deleted successfully.')  
