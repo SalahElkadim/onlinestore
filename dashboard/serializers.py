@@ -601,7 +601,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'subtotal', 'discount_amount', 'shipping_cost', 'total_price',
             'status', 'status_display',
             'payment_method', 'payment_status', 'payment_status_display',
-            'shipping_name', 'shipping_phone', 'shipping_address',
+            'shipping_name', 'shipping_phone','whatsapp_number', 'shipping_address',
             'shipping_city', 'shipping_country', 'shipping_postal_code',
             'notes',
             'items', 'payments',
