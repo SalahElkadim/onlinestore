@@ -443,7 +443,7 @@ class StoreOrderDetailSerializer(serializers.ModelSerializer):
             'payment_method', 'payment_status', 'payment_status_display',
             'shipping_name', 'shipping_phone', 'shipping_address',
             'shipping_city', 'shipping_country', 'shipping_postal_code',
-            'notes', 'items',
+            'notes', 'items','whatsapp_number',
             'can_cancel', 'cancellation', 'guest_info',
             'created_at', 'updated_at',
         ]
@@ -528,6 +528,7 @@ class CheckoutSerializer(serializers.Serializer):
     # بيانات الشحن
     shipping_name        = serializers.CharField(max_length=200)
     shipping_phone       = serializers.CharField(max_length=20)
+    whatsapp_number      = serializers.CharField(max_length=20, required=False, allow_blank=True)
     shipping_address     = serializers.CharField(max_length=500)
     shipping_city        = serializers.CharField(max_length=100)
     shipping_country     = serializers.CharField(max_length=100)
@@ -606,6 +607,7 @@ class CheckoutSerializer(serializers.Serializer):
             payment_method=validated_data['payment_method'],
             shipping_name=validated_data['shipping_name'],
             shipping_phone=validated_data['shipping_phone'],
+            whatsapp_number=validated_data.get('whatsapp_number', ''),
             shipping_address=validated_data['shipping_address'],
             shipping_city=validated_data['shipping_city'],
             shipping_country=validated_data['shipping_country'],

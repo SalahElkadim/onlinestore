@@ -349,7 +349,7 @@ class Order(models.Model):
     shipping_city       = models.CharField(max_length=100)
     shipping_country    = models.CharField(max_length=100)
     shipping_postal_code = models.CharField(max_length=20, blank=True)
-
+    whatsapp_number      = models.CharField(max_length=20, blank=True)
     notes      = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
