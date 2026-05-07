@@ -321,8 +321,14 @@ class CheckoutView(StandardResponseMixin, APIView):
         order = serializer.save()
 
         from dashboard.utils import create_notification
+        from dashboard.onesignal_service import push_to_admins
         create_notification('new_order', f'طلب جديد #{order.order_number} تم استلامه!')
-
+        push_to_admins(
+            title='طلب جديد',
+            message=f'طلب #{order.order_number} — {order.shipping_name} — {order.total_price} ج.م',
+            url=f'/orders',
+            notif_type='new_order',
+        )
         return self.success(
             StoreOrderDetailSerializer(order).data,
             'تم إنشاء الطلب بنجاح.',
