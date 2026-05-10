@@ -267,19 +267,19 @@ def create_warehouse_stock_on_variant_create(sender, instance, created, **kwargs
         variant=instance,
         defaults={'quantity': 0}
     )
-    # dashboard/signals.py
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from .models import Order  
+
+# ─────────────────────────────────────────────
+#  5. إشعار الأدمن لما يتعمل أوردر جديد
+# ─────────────────────────────────────────────
 from dashboard.onesignal_service import push_to_admins
 
-@receiver(post_save, sender=Order)
+@receiver(post_save, sender='dashboard.Order')
 def notify_admins_new_order(sender, instance, created, **kwargs):
     if created:
         push_to_admins(
             title="طلب جديد",
-            message=f"طلب #{instance.id} بقيمة {instance.total_price} — {instance.shipping_name}",
-            url=f"/admin/orders/{instance.id}/",
+            message=f"طلب #{instance.order_number} بقيمة {instance.total_price} — {instance.shipping_name}",
+            url=f"/orders/{instance.id}/",
             notif_type="new_order",
         )
 
