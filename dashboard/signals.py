@@ -278,7 +278,7 @@ def notify_admins_new_order(sender, instance, created, **kwargs):
     if created:
         push_to_admins(
             title="طلب جديد",
-            message=f"طلب #{instance.id} بقيمة {instance.total} — {instance.customer_name}",
+            message=f"طلب #{instance.id} بقيمة {instance.total_price} — {instance.shipping_name}",
             url=f"/admin/orders/{instance.id}/",
             notif_type="new_order",
         )
