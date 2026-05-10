@@ -3,7 +3,7 @@ from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
-
+from rest_framework.pagination import PageNumberPagination
 from rest_framework import status, filters
 from rest_framework.views import APIView
 from rest_framework.generics import (
@@ -685,9 +685,13 @@ class AttributeValueDetailView(StandardResponseMixin, DestroyAPIView):
 # ============================================================
 # 6. ORDER VIEWS
 # ============================================================
-
+class OrderPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 class OrderListView(StandardResponseMixin, ListCreateAPIView):
     permission_classes = [IsAdminOrStaff]
+    pagination_class   = OrderPagination 
     filter_backends    = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields   = ['status', 'payment_status', 'payment_method']
     search_fields      = ['order_number', 'shipping_name', 'shipping_phone', 'user__email']
