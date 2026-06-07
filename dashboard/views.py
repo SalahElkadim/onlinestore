@@ -40,7 +40,7 @@ from .serializers import (
     ProductImageSerializer,
     CouponSerializer, ValidateCouponSerializer,
     OrderListSerializer, OrderDetailSerializer, OrderCreateSerializer, UpdateOrderStatusSerializer,
-    PaymentSerializer,
+    PaymentSerializer,OrderEditSerializer,
     NotificationSerializer,
     ActivityLogSerializer,
     DashboardStatsSerializer, InventoryAlertSerializer,
@@ -1189,3 +1189,26 @@ class BulkShippingRateView(StandardResponseMixin, APIView):
             'created': len(created),
             'updated': len(skipped),
         }, f'تم معالجة {len(created) + len(skipped)} محافظة.')
+    
+
+class UpdateOrderView(StandardResponseMixin, APIView):
+    """
+    PATCH /api/admin/orders/{pk}/edit/
+    يسمح بتعديل بيانات الأوردر بعد إنشائه
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def patch(self, request, pk):
+        order = get_object_or_404(Order, pk=pk)
+
+        # الأوردر المكتمل أو المسترجع لا يمكن تعديله
+        if order.status in [Order.Status.DELIVERED, Order.Status.REFUNDED]:
+            return self.error(f'لا يمكن تعديل أوردر بحالة "{order.status}".')
+
+        serializer = OrderEditSerializer(order, data=request.data, partial=True,
+                                         context={'request': request})
+        if serializer.is_valid():
+            order = serializer.save()
+            log_activity(request, 'update', 'Order', order)
+            return self.success(OrderDetailSerializer(order).data, 'تم تحديث الأوردر.')
+        return self.error('فشل التحديث.', serializer.errors)

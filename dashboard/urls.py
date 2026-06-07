@@ -8,7 +8,7 @@ from .views import (
     AdminLoginView, AdminLogoutView, ChangePasswordView, MeView,
 
     # Dashboard
-    DashboardStatsView, InventoryAlertsView, AnalyticsView,
+    DashboardStatsView, InventoryAlertsView, AnalyticsView,UpdateOrderView,
 
     # Users
     UserListView, UserDetailView, UserBlockToggleView,
@@ -153,6 +153,7 @@ urlpatterns = [
      path('orders/export/',            ExportOrdersView.as_view(),     name='order_export'),
      path('orders/<int:pk>/',          OrderDetailView.as_view(),      name='order_detail'),
      path('orders/<int:pk>/status/',   UpdateOrderStatusView.as_view(), name='order_status'),
+     path('orders/<int:pk>/edit/', UpdateOrderView.as_view()),
 
      # ──────────────────────────────────────────────────────────
      # PAYMENTS

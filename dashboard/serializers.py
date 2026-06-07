@@ -847,3 +847,64 @@ class InventoryAlertSerializer(serializers.ModelSerializer):
         if stock <= 5:
             return 'low_stock'
         return 'ok'
+    
+class OrderEditSerializer(serializers.ModelSerializer):
+    """
+    تعديل بيانات الأوردر بعد إنشائه.
+    يسمح بتعديل الشحن + طريقة الدفع + الملاحظات + الكوبون.
+    لو عدّل items → يعيد حساب السعر.
+    """
+    items = OrderItemWriteSerializer(many=True, required=False)
+
+    class Meta:
+        model = Order
+        fields = [
+            'user', 'coupon',
+            'payment_method', 'payment_status',
+            'shipping_name', 'shipping_phone', 'whatsapp_number',
+            'shipping_address', 'shipping_city',
+            'shipping_country', 'shipping_postal_code',
+            'shipping_cost', 'notes',
+            'items',
+        ]
+
+    def update(self, instance, validated_data):
+        from decimal import Decimal
+        items_data = validated_data.pop('items', None)
+        coupon     = validated_data.get('coupon', instance.coupon)
+
+        # تطبيق الحقول العادية
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # لو في تعديل على الـ items
+        if items_data is not None:
+            # حذف القديمة وإعادة الإنشاء
+            instance.items.all().delete()
+
+            subtotal = Decimal('0')
+            for item_data in items_data:
+                variant = item_data.get('variant')
+                product = item_data['product']
+                price   = variant.effective_price if variant else product.effective_price
+                qty     = item_data['quantity']
+                subtotal += price * qty
+
+                OrderItem.objects.create(
+                    order        = instance,
+                    product      = product,
+                    variant      = variant,
+                    product_name = product.name,
+                    variant_name = str(variant) if variant else '',
+                    unit_price   = price,
+                    quantity     = qty,
+                )
+
+            shipping_cost          = Decimal(str(validated_data.get('shipping_cost', instance.shipping_cost)))
+            discount_amount        = coupon.calculate_discount(subtotal) if coupon else Decimal('0')
+            instance.subtotal      = subtotal
+            instance.discount_amount = discount_amount
+            instance.total_price   = subtotal - discount_amount + shipping_cost
+
+        instance.save()
+        return instance

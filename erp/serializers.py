@@ -99,7 +99,8 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         model = SalesOrder
         fields = [
             'id', 'order_number', 'source', 'status',
-            'online_order', 'customer', 'customer_name', 'customer_phone',
+            'online_order', 'customer', 'customer_name', 'customer_phone','governorate',        # ← جديد
+            'address_details',  
             'customer_email', 'customer_note',
             'subtotal', 'discount_amount', 'tax_amount', 'shipping_cost', 'total',
             'payment_method', 'payment_status', 'amount_paid',
@@ -126,7 +127,8 @@ class SalesOrderWriteSerializer(serializers.ModelSerializer):
             'subtotal', 'total',                          # ✅ مضافين
             'discount_amount', 'tax_amount', 'shipping_cost',
             'payment_method', 'payment_status', 'amount_paid',
-            'reference_code', 'internal_notes', 'created_by',
+            'reference_code', 'internal_notes', 'created_by','governorate',        # ← جديد
+            'address_details',  
         ]
         read_only_fields = ['id']
  

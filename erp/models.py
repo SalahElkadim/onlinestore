@@ -172,6 +172,9 @@ class SalesOrder(models.Model):
     customer_phone = models.CharField(max_length=20, blank=True)
     customer_email = models.EmailField(blank=True)
     customer_note  = models.TextField(blank=True)
+    # أضف بعد customer_note
+    governorate     = models.CharField(max_length=100, blank=True)
+    address_details = models.CharField(max_length=500, blank=True)
 
     # ── التسعير ──
     subtotal        = models.DecimalField(max_digits=10, decimal_places=2, default=0)
