@@ -24,7 +24,7 @@ from .views import (
     # Coupon
     ValidateCouponView,
 )
-
+from dashboard.views import ShippingRateListView
 app_name = 'store'
 
 urlpatterns = [
@@ -105,4 +105,6 @@ urlpatterns = [
     path('coupons/validate/', ValidateCouponView.as_view(), name='coupon_validate'),
     # store/urls.py — أضف السطر ده
 path('products/<str:slug>/find-variant/', FindVariantView.as_view()),
+    path('shipping-rates/', ShippingRateListView.as_view(), name='shipping_rates'),
+
 ]
