@@ -22,7 +22,7 @@ from .models import (
     Order, OrderItem,
     Payment,
     Notification,
-    ActivityLog, ProductVideo
+    ActivityLog, ProductVideo,ShippingRate
 )
 
 
@@ -611,6 +611,11 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     def get_payments(self, obj):
         return PaymentSerializer(obj.payments.all(), many=True).data
 
+class ShippingRateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = ShippingRate
+        fields = ['id', 'governorate', 'cost', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
 
 class OrderCreateSerializer(serializers.ModelSerializer):
     """

@@ -1111,3 +1111,81 @@ class DeleteOrderView(StandardResponseMixin, APIView):
         log_activity(request, 'delete', 'Order', order)
         order.delete()
         return self.success(message=f'Order #{order_number} deleted successfully.')  
+    
+from .models import ShippingRate
+from .serializers import ShippingRateSerializer
+
+class ShippingRateListView(StandardResponseMixin, ListCreateAPIView):
+    serializer_class   = ShippingRateSerializer
+    filter_backends    = [filters.SearchFilter]
+    search_fields      = ['governorate']
+
+    def get_permissions(self):
+        # الـ GET مفتوح للـ store، الباقي admin فقط
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAdminOrStaff()]
+
+    def get_queryset(self):
+        return ShippingRate.objects.filter(is_active=True)
+
+    def create(self, request, *args, **kwargs):
+        serializer = ShippingRateSerializer(data=request.data)
+        if serializer.is_valid():
+            rate = serializer.save()
+            log_activity(request, 'create', 'ShippingRate', rate)
+            return self.success(
+                ShippingRateSerializer(rate).data,
+                'تم إضافة سعر الشحن.',
+                status.HTTP_201_CREATED
+            )
+        return self.error('فشل الإضافة.', serializer.errors)
+
+
+class ShippingRateDetailView(StandardResponseMixin, RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdminOrStaff]
+    serializer_class   = ShippingRateSerializer
+    queryset           = ShippingRate.objects.all()
+
+    def update(self, request, *args, **kwargs):
+        partial    = kwargs.pop('partial', False)
+        instance   = self.get_object()
+        serializer = ShippingRateSerializer(instance, data=request.data, partial=partial)
+        if serializer.is_valid():
+            rate = serializer.save()
+            log_activity(request, 'update', 'ShippingRate', rate)
+            return self.success(ShippingRateSerializer(rate).data, 'تم التحديث.')
+        return self.error('فشل التحديث.', serializer.errors)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        log_activity(request, 'delete', 'ShippingRate', instance)
+        instance.delete()
+        return self.success(message='تم الحذف.')
+
+
+class BulkShippingRateView(StandardResponseMixin, APIView):
+    """
+    لو حبيت تعمل seed للمحافظات كلها دفعة واحدة.
+    POST /api/admin/shipping-rates/bulk/
+    body: [{"governorate": "القاهرة", "cost": 25}, ...]
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request):
+        rates = request.data if isinstance(request.data, list) else []
+        created, skipped = [], []
+        for item in rates:
+            gov  = item.get('governorate', '').strip()
+            cost = item.get('cost')
+            if not gov or cost is None:
+                continue
+            obj, was_created = ShippingRate.objects.update_or_create(
+                governorate=gov,
+                defaults={'cost': cost, 'is_active': True}
+            )
+            (created if was_created else skipped).append(gov)
+        return self.success({
+            'created': len(created),
+            'updated': len(skipped),
+        }, f'تم معالجة {len(created) + len(skipped)} محافظة.')

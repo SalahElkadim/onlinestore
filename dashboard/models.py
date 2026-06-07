@@ -371,7 +371,19 @@ class Order(models.Model):
     def __str__(self):
         return f"Order {self.order_number} – {self.user}"
 
+class ShippingRate(models.Model):
+    governorate   = models.CharField(max_length=100, unique=True)
+    cost          = models.DecimalField(max_digits=8, decimal_places=2)
+    is_active     = models.BooleanField(default=True)
+    created_at    = models.DateTimeField(auto_now_add=True)
+    updated_at    = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ['governorate']
+
+    def __str__(self):
+        return f"{self.governorate} — {self.cost}"
+    
 class OrderItem(models.Model):
     """
     Snapshot of the product/variant at the time of purchase.
