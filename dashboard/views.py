@@ -1117,6 +1117,7 @@ from .serializers import ShippingRateSerializer
 
 class ShippingRateListView(StandardResponseMixin, ListCreateAPIView):
     serializer_class   = ShippingRateSerializer
+    pagination_class = None 
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['governorate']
 
