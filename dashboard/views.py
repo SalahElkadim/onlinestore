@@ -1129,6 +1129,11 @@ class ShippingRateListView(StandardResponseMixin, ListCreateAPIView):
 
     def get_queryset(self):
         return ShippingRate.objects.filter(is_active=True)
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return self.success(serializer.data)
 
     def create(self, request, *args, **kwargs):
         serializer = ShippingRateSerializer(data=request.data)
