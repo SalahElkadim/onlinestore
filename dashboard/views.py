@@ -765,18 +765,18 @@ class OrderStatsView(StandardResponseMixin, APIView):
         result = {row['status']: row['count'] for row in data}
         return self.success(result)
 
-
 class ExportOrdersView(StandardResponseMixin, APIView):
-    """Export filtered orders as CSV."""
+    """Export filtered orders as Excel (.xlsx) using the shipping-company template."""
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request):
-        import csv
+        import openpyxl
+        from openpyxl.utils import get_column_letter
         from django.http import HttpResponse
 
         qs = Order.objects.select_related('user').prefetch_related('items')
 
-        # Apply same date filters as OrderListView
+        # same filters as OrderListView
         date_from = request.query_params.get('date_from')
         date_to   = request.query_params.get('date_to')
         status_f  = request.query_params.get('status')
@@ -787,30 +787,66 @@ class ExportOrdersView(StandardResponseMixin, APIView):
         if status_f:
             qs = qs.filter(status=status_f)
 
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="orders.csv"'
+        headers = [
+            "Order code", "*Recevier", "*Recevier's phonenumber", "Recevier's phonenumber2",
+            "*Arrival governorate", "*Arrival city", "*Arrival area", "Receiver street",
+            "Item type", "Item name", "Insurance Value", "Express product",
+            "EX/DR Description", "COD currency", "COD amount", "FOD  amount",
+            "Goods weight", "Customer's pickup number", "Customer's pickup information",
+            "Remarks", "RC",
+        ]
 
-        writer = csv.writer(response)
-        writer.writerow([
-            'Order #', 'Date', 'Customer', 'Email',
-            'Items', 'Subtotal', 'Discount', 'Total',
-            'Payment Method', 'Payment Status', 'Status',
-        ])
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Orders"
+        ws.append(headers)
+
         for order in qs:
-            writer.writerow([
-                order.order_number,
-                order.created_at.strftime('%Y-%m-%d %H:%M'),
-                order.shipping_name,
-                order.user.email if order.user else '',
-                order.items.count(),
-                order.subtotal,
-                order.discount_amount,
-                order.total_price,
-                order.payment_method,
-                order.payment_status,
-                order.status,
-            ])
+            item_names = ", ".join(
+                f"{it.product_name}"
+                + (f" ({it.variant_name})" if it.variant_name else "")
+                + f" x{it.quantity}"
+                for it in order.items.all()
+            )
+
+            cod_amount = order.total_price if order.payment_method == 'cod' else 0
+
+            row = [
+                order.order_number,                       # Order code
+                order.shipping_name,                       # *Recevier
+                order.shipping_phone,                       # *Recevier's phonenumber
+                order.whatsapp_number or '',                # Recevier's phonenumber2
+                order.shipping_city,                        # *Arrival governorate
+                order.shipping_district ,                        # *Arrival city
+                '',                                          # *Arrival area
+                order.shipping_address,                      # Receiver street
+                'Parcel',                                    # Item type
+                item_names,                                  # Item name
+                '',                                          # Insurance Value
+                '',                                          # Express product
+                order.notes or '',                           # EX/DR Description
+                'EGP',                                       # COD currency
+                float(cod_amount),                           # COD amount
+                '',                                          # FOD amount
+                '',                                          # Goods weight
+                '',                                          # Customer's pickup number
+                '',                                          # Customer's pickup information
+                order.notes or '',                           # Remarks
+                '',                                          # RC
+            ]
+            ws.append(row)
+
+        # auto width
+        for i, header in enumerate(headers, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = max(14, len(header) + 2)
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="orders.xlsx"'
+        wb.save(response)
         return response
+
 
 
 # ============================================================

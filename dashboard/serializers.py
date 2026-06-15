@@ -603,7 +603,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'payment_method', 'payment_status', 'payment_status_display',
             'shipping_name', 'shipping_phone','whatsapp_number', 'shipping_address',
             'shipping_city', 'shipping_country', 'shipping_postal_code',
-            'notes',
+            'notes','shipping_district',
             'items', 'payments',
             'created_at', 'updated_at',
         ]
@@ -636,7 +636,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'user', 'coupon',
             'payment_method',
             'shipping_name', 'shipping_phone', 'shipping_address',
-            'shipping_city', 'shipping_country', 'shipping_postal_code',
+            'shipping_city', 'shipping_country', 'shipping_postal_code','shipping_district',
             'notes', 'items', 'shipping_cost',
         ]
 
@@ -864,7 +864,7 @@ class OrderEditSerializer(serializers.ModelSerializer):
             'shipping_name', 'shipping_phone', 'whatsapp_number',
             'shipping_address', 'shipping_city',
             'shipping_country', 'shipping_postal_code',
-            'shipping_cost', 'notes',
+            'shipping_cost', 'notes','shipping_district', 
             'items',
         ]
 
