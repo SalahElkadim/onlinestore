@@ -29,7 +29,7 @@ from .models import (
     Order, OrderItem,
     Payment,
     Notification,
-    ActivityLog,
+    ActivityLog,ProductPriceTier
 )
 from .serializers import (
     LoginSerializer, ChangePasswordSerializer,
@@ -44,7 +44,7 @@ from .serializers import (
     NotificationSerializer,
     ActivityLogSerializer,
     DashboardStatsSerializer, InventoryAlertSerializer,
-    TopProductSerializer, TopCustomerSerializer, SalesChartPointSerializer,
+    TopProductSerializer, TopCustomerSerializer, SalesChartPointSerializer,ProductPriceTierSerializer
 )
 from .permissions import IsAdminOrStaff, IsAdminOnly, HasModulePermission
 from .utils import log_activity, create_notification, get_client_ip
@@ -1254,3 +1254,40 @@ class UpdateOrderView(StandardResponseMixin, APIView):
             log_activity(request, 'update', 'Order', order)
             return self.success(OrderDetailSerializer(order).data, 'تم تحديث الأوردر.')
         return self.error('فشل التحديث.', serializer.errors)
+    
+class ProductPriceTierView(StandardResponseMixin, APIView):
+    """
+    GET  /api/admin/products/{pk}/price-tiers/   → list tiers
+    POST /api/admin/products/{pk}/price-tiers/   → replace all tiers
+    """
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request, pk):
+        product = get_object_or_404(Product, pk=pk)
+        tiers   = product.price_tiers.all()
+        return self.success(ProductPriceTierSerializer(tiers, many=True).data)
+
+    def post(self, request, pk):
+        """
+        بيستقبل list من الـ tiers ويعمل replace كامل.
+        body: [{"min_quantity": 1, "unit_price": 400}, ...]
+        """
+        product    = get_object_or_404(Product, pk=pk)
+        serializer = ProductPriceTierSerializer(data=request.data, many=True)
+
+        if not serializer.is_valid():
+            return self.error('بيانات غير صحيحة.', serializer.errors)
+
+        # Replace
+        product.price_tiers.all().delete()
+        tiers = [
+            ProductPriceTier(product=product, **item)
+            for item in serializer.validated_data
+        ]
+        ProductPriceTier.objects.bulk_create(tiers)
+
+        log_activity(request, 'update', 'ProductPriceTier', product)
+        return self.success(
+            ProductPriceTierSerializer(product.price_tiers.all(), many=True).data,
+            'تم تحديث الأسعار.'
+        )

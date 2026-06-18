@@ -197,6 +197,7 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
     variants            = StoreProductVariantSerializer(many=True, read_only=True)
     category_name       = serializers.CharField(source='category.name', read_only=True)
     discount_percentage = serializers.DecimalField(max_digits=5, decimal_places=1, read_only=True)
+    price_tiers = serializers.SerializerMethodField()
     effective_price     = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     avg_rating          = serializers.SerializerMethodField()
     reviews_count       = serializers.SerializerMethodField()
@@ -224,7 +225,9 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
         avg = result['avg']
         return round(avg, 1) if avg else None
     
-    
+    def get_price_tiers(self, obj):
+        from dashboard.serializers import ProductPriceTierSerializer
+        return ProductPriceTierSerializer(obj.price_tiers.all(), many=True).data
     
     def get_available_attributes(self, obj):
         result = {}
@@ -276,11 +279,13 @@ class CartItemSerializer(serializers.ModelSerializer):
         ]
 
     def get_unit_price(self, obj):
-        price = obj.variant.effective_price if obj.variant else obj.product.effective_price
+        from dashboard.utils import get_price_for_quantity
+        price = get_price_for_quantity(obj.product, obj.quantity)
         return str(price)
 
     def get_subtotal(self, obj):
-        price = obj.variant.effective_price if obj.variant else obj.product.effective_price
+        from dashboard.utils import get_price_for_quantity
+        price = get_price_for_quantity(obj.product, obj.quantity)
         return str(price * obj.quantity)
 
     def get_variant_label(self, obj):
@@ -327,8 +332,9 @@ class CartSerializer(serializers.ModelSerializer):
         fields = ['id', 'items', 'total_items', 'subtotal', 'updated_at']
 
     def get_subtotal(self, obj):
+        from dashboard.utils import get_price_for_quantity
         total = sum(
-            (item.variant.effective_price if item.variant else item.product.effective_price) * item.quantity
+            get_price_for_quantity(item.product, item.quantity) * item.quantity
             for item in obj.items.all()
         )
         return str(total)
@@ -583,7 +589,8 @@ class CheckoutSerializer(serializers.Serializer):
         for item in items_data:
             variant = item.get('variant')
             product = item['product']
-            price   = variant.effective_price if variant else product.effective_price
+            from dashboard.utils import get_price_for_quantity
+            price = get_price_for_quantity(product, item['quantity'])
             subtotal += price * item['quantity']
 
         discount_amount = coupon.calculate_discount(subtotal) if coupon else Decimal('0')
@@ -630,7 +637,8 @@ class CheckoutSerializer(serializers.Serializer):
         for item in items_data:
             variant = item.get('variant')
             product = item['product']
-            price   = variant.effective_price if variant else product.effective_price
+            from dashboard.utils import get_price_for_quantity
+            price = get_price_for_quantity(product, item['quantity'])
 
             OrderItem.objects.create(
                 order=order,

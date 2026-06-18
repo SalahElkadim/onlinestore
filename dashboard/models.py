@@ -173,6 +173,30 @@ class Product(models.Model):
     def is_in_stock(self):
         return self.total_stock > 0
 
+
+class ProductPriceTier(models.Model):
+    """
+    Quantity-based pricing tiers per product.
+    Example:
+        min_quantity=1  → unit_price=400
+        min_quantity=2  → unit_price=350
+        min_quantity=3  → unit_price=300
+    """
+    product      = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='price_tiers'
+    )
+    min_quantity = models.PositiveIntegerField()
+    unit_price   = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        ordering = ['min_quantity']
+        unique_together = ('product', 'min_quantity')
+
+    def __str__(self):
+        return f"{self.product.name} | qty≥{self.min_quantity} → {self.unit_price}"
+    
 from cloudinary.models import CloudinaryField
 
 class ProductImage(models.Model):

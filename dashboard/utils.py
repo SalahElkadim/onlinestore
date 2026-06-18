@@ -70,3 +70,23 @@ def create_notification(notif_type: str, message: str, title: str = None, link: 
             )
         except Exception:
             pass  # push failure must never break the main request
+
+
+def get_price_for_quantity(product, quantity):
+    # جيب أعلى tier مناسبة للكمية
+    tier = product.price_tiers.filter(
+        min_quantity__lte=quantity
+    ).order_by('-min_quantity').first()
+
+    if not tier:
+        # مفيش tiers خالص → ارجع effective_price
+        return product.effective_price
+
+    # لو الـ tier هي الأولى (أقل min_quantity)
+    lowest_tier = product.price_tiers.order_by('min_quantity').first()
+    if tier == lowest_tier:
+        # دايماً effective_price (بياخد الديسكونت في الاعتبار)
+        return product.effective_price
+
+    # tiers تانية → ارجع سعر الـ tier
+    return tier.unit_price

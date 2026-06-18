@@ -22,7 +22,7 @@ from .models import (
     Order, OrderItem,
     Payment,
     Notification,
-    ActivityLog, ProductVideo,ShippingRate
+    ActivityLog, ProductVideo,ShippingRate,ProductPriceTier
 )
 
 
@@ -346,11 +346,21 @@ class ProductListSerializer(serializers.ModelSerializer):
             return None
         return img.image.build_url() if hasattr(img.image, 'build_url') else img.image.url
 
+class ProductPriceTierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = ProductPriceTier
+        fields = ['id', 'min_quantity', 'unit_price']
 
+    def validate_min_quantity(self, value):
+        if value < 1:
+            raise serializers.ValidationError("min_quantity لازم تكون 1 على الأقل.")
+        return value
+    
 class ProductDetailSerializer(serializers.ModelSerializer):
     """Full product detail with variants and images."""
     images              = ProductImageSerializer(many=True, read_only=True)
     variants            = ProductVariantSerializer(many=True, read_only=True)
+    price_tiers = ProductPriceTierSerializer(many=True, read_only=True)
     category_name       = serializers.CharField(source='category.name', read_only=True)
     total_stock         = serializers.IntegerField(read_only=True)
     discount_percentage = serializers.DecimalField(max_digits=5, decimal_places=1, read_only=True)
@@ -361,10 +371,10 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'slug', 'description', 'sku',
             'price', 'discount_price', 'discount_percentage', 'effective_price',
-            'category', 'category_name',
+            'category', 'category_name','price_tiers',
             'status', 'total_stock', 'is_in_stock',
             'images', 'variants',
-            'created_at', 'updated_at',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['slug', 'created_at', 'updated_at']
 
@@ -528,14 +538,14 @@ class OrderItemWriteSerializer(serializers.ModelSerializer):
         fields = ['product', 'variant', 'quantity']
 
     def validate(self, data):
-        variant = data.get('variant')
-        product = data['product']
-        qty     = data['quantity']
+        variant  = data.get('variant')
+        product  = data['product']
+        qty      = data['quantity']
 
         if variant:
             if variant.product != product:
                 raise serializers.ValidationError("Variant does not belong to this product.")
-            # ✅ التحقق من المخزون بيحصل من WarehouseStock مش variant.stock
+            # stock check (زي ما هو)
             from erp.models import WarehouseStock, Warehouse
             warehouse = Warehouse.objects.filter(is_default=True).first()
             if warehouse:
@@ -549,12 +559,9 @@ class OrderItemWriteSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         f"No stock found for '{product.name}' in the default warehouse."
                     )
-            else:
-                # fallback للـ variant.stock لو مفيش warehouse
-                if variant.stock < qty:
-                    raise serializers.ValidationError(
-                        f"Insufficient stock for '{product.name}'. Available: {variant.stock}"
-                    )
+
+        from .utils import get_price_for_quantity
+        data['resolved_price'] = get_price_for_quantity(product, qty)
         return data
 
 
@@ -656,7 +663,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         for item_data in items_data:
             variant = item_data.get('variant')
             product = item_data['product']
-            price   = variant.effective_price if variant else product.effective_price
+            from .utils import get_price_for_quantity
+            price = item_data.get('resolved_price') or get_price_for_quantity(product, item_data['quantity'])
             subtotal += price * item_data['quantity']
 
         discount_amount = coupon.calculate_discount(subtotal) if coupon else Decimal('0')
@@ -674,8 +682,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         for item_data in items_data:
             variant = item_data.get('variant')
             product = item_data['product']
-            price   = variant.effective_price if variant else product.effective_price
-
+            price = item_data.get('resolved_price') or (variant.effective_price if variant else product.effective_price)
             OrderItem.objects.create(
                 order=order,
                 product=product,
@@ -886,8 +893,9 @@ class OrderEditSerializer(serializers.ModelSerializer):
             for item_data in items_data:
                 variant = item_data.get('variant')
                 product = item_data['product']
-                price   = variant.effective_price if variant else product.effective_price
+                from .utils import get_price_for_quantity
                 qty     = item_data['quantity']
+                price = get_price_for_quantity(product, qty)
                 subtotal += price * qty
 
                 OrderItem.objects.create(
@@ -908,3 +916,5 @@ class OrderEditSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+    
+
