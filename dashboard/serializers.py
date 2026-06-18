@@ -660,17 +660,18 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         from decimal import Decimal
+        from .utils import get_prices_for_items
+
         items_data    = validated_data.pop('items')
         coupon        = validated_data.pop('coupon', None)
         shipping_cost = Decimal(str(validated_data.pop('shipping_cost', 0)))
 
-        # Calculate pricing
+        # ✅ السعر بيتحسب على إجمالي كمية المنتج، مش على كل variant لوحده
+        item_prices = get_prices_for_items(items_data)
+
         subtotal = Decimal('0')
         for item_data in items_data:
-            variant = item_data.get('variant')
-            product = item_data['product']
-            from .utils import get_price_for_quantity
-            price = item_data.get('resolved_price') or get_price_for_quantity(product, item_data['quantity'])
+            price = item_prices[item_data['product'].id]
             subtotal += price * item_data['quantity']
 
         discount_amount = coupon.calculate_discount(subtotal) if coupon else Decimal('0')
@@ -688,7 +689,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         for item_data in items_data:
             variant = item_data.get('variant')
             product = item_data['product']
-            price = item_data.get('resolved_price') or (variant.effective_price if variant else product.effective_price)
+            price   = item_prices[product.id]   # ← نفس السعر لكل variants المنتج
+
             OrderItem.objects.create(
                 order=order,
                 product=product,
@@ -699,11 +701,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 quantity=item_data['quantity'],
             )
 
-            # ✅ لا يوجد خصم من variant.stock هنا
-            # الخصم بيحصل من WarehouseStock عند تحويل الأوردر لـ confirmed
-            # في dashboard/signals.py → deduct_warehouse_stock_on_confirm
-
-        # Update coupon usage
         if coupon:
             coupon.used_count += 1
             coupon.save()
@@ -883,25 +880,25 @@ class OrderEditSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         from decimal import Decimal
+        from .utils import get_prices_for_items
+
         items_data = validated_data.pop('items', None)
         coupon     = validated_data.get('coupon', instance.coupon)
 
-        # تطبيق الحقول العادية
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        # لو في تعديل على الـ items
         if items_data is not None:
-            # حذف القديمة وإعادة الإنشاء
             instance.items.all().delete()
+
+            item_prices = get_prices_for_items(items_data)
 
             subtotal = Decimal('0')
             for item_data in items_data:
                 variant = item_data.get('variant')
                 product = item_data['product']
-                from .utils import get_price_for_quantity
                 qty     = item_data['quantity']
-                price = get_price_for_quantity(product, qty)
+                price   = item_prices[product.id]
                 subtotal += price * qty
 
                 OrderItem.objects.create(
@@ -914,11 +911,11 @@ class OrderEditSerializer(serializers.ModelSerializer):
                     quantity     = qty,
                 )
 
-            shipping_cost          = Decimal(str(validated_data.get('shipping_cost', instance.shipping_cost)))
-            discount_amount        = coupon.calculate_discount(subtotal) if coupon else Decimal('0')
-            instance.subtotal      = subtotal
-            instance.discount_amount = discount_amount
-            instance.total_price   = subtotal - discount_amount + shipping_cost
+            shipping_cost             = Decimal(str(validated_data.get('shipping_cost', instance.shipping_cost)))
+            discount_amount           = coupon.calculate_discount(subtotal) if coupon else Decimal('0')
+            instance.subtotal         = subtotal
+            instance.discount_amount  = discount_amount
+            instance.total_price      = subtotal - discount_amount + shipping_cost
 
         instance.save()
         return instance
