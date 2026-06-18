@@ -212,7 +212,7 @@ class StoreProductDetailSerializer(serializers.ModelSerializer):
             'id', 'name', 'slug', 'description',
             'price', 'discount_price', 'discount_percentage', 'effective_price',
             'category', 'category_name',
-            'images', 'variants',
+            'images', 'variants','price_tiers',
             'is_in_stock', 'total_stock',
             'avg_rating', 'reviews_count', 'reviews',
             'created_at',
