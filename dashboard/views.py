@@ -561,6 +561,18 @@ class ProductImageView(StandardResponseMixin, APIView):
         image.is_primary = True
         image.save()
         return self.success(message='Primary image updated.')
+    
+    def put(self, request, pk, image_pk):
+        """تعديل بيانات صورة موجودة (alt_text, order, attribute_value)"""
+        image = get_object_or_404(ProductImage, pk=image_pk, product_id=pk)
+        serializer = ProductImageSerializer(image, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return self.success(
+                ProductImageSerializer(image).data, 
+                'Image updated.'
+            )
+        return self.error('Update failed.', serializer.errors)
 
 
 # ── Variants ──────────────────────────────────────────────────

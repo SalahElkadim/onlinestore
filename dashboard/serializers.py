@@ -258,13 +258,19 @@ class AttributeSerializer(serializers.ModelSerializer):
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
+    new_image_url = serializers.CharField(write_only=True, required=False)
     class Meta:
         model  = ProductImage
         fields = [
             'id', 'image', 'alt_text',
             'is_primary', 'order',
-            'attribute_value',   # ✦ جديد
+            'attribute_value','new_image_url',   # ✦ جديد
         ]
+    def update(self, instance, validated_data):
+        new_url = validated_data.pop('new_image_url', None)
+        if new_url:
+            instance.image = new_url  # Cloudinary URL
+        return super().update(instance, validated_data)
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
