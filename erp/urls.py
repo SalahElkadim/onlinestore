@@ -9,7 +9,7 @@ from .views import (
     StockMovementListView,
     StockAlertListCreateView, StockAlertDetailView,
     # Purchasing
-    SupplierListCreateView, SupplierDetailView,
+    SupplierListCreateView, SupplierDetailView,SalesRevenueStatsView,
     PurchaseOrderListCreateView, PurchaseOrderDetailView, PurchaseOrderItemListCreateView,
     GoodsReceiptListCreateView,
     # Returns
@@ -125,4 +125,6 @@ urlpatterns = [
 
     path('sales-targets/',                      SalesTargetListCreateView.as_view()),
     path('sales-targets/<int:pk>/',             SalesTargetDetailView.as_view()),
+    path('sales-orders/revenue-stats/', SalesRevenueStatsView.as_view()),
+
 ]

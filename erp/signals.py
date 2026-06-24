@@ -337,3 +337,61 @@ def update_summary_on_revenue(sender, instance, **kwargs):
 @receiver(post_delete, sender='erp.Expense')
 def update_summary_on_expense(sender, instance, **kwargs):
     _recalc_financial_summary(instance.date)
+
+
+# ─────────────────────────────────────────────
+#  8. إرجاع المخزون لما SalesOrder يتكنسل أو يترجع
+# ─────────────────────────────────────────────
+@receiver(pre_save, sender='erp.SalesOrder')
+def track_sales_order_status_before_save(sender, instance, **kwargs):
+    if instance.pk:
+        try:
+            instance._old_status = sender.objects.get(pk=instance.pk).status
+        except sender.DoesNotExist:
+            instance._old_status = None
+    else:
+        instance._old_status = None
+
+
+@receiver(post_save, sender='erp.SalesOrder')
+def restock_on_sales_order_cancel_or_return(sender, instance, **kwargs):
+    old_status = getattr(instance, '_old_status', None)
+
+    # لازم يكون كان في مرحلة بعد الـ confirm عشان يكون المخزون اتخصم فعلاً
+    RESTOCKABLE_STATUSES = {'confirmed', 'processing', 'shipped', 'delivered'}
+    if old_status not in RESTOCKABLE_STATUSES:
+        return
+
+    if instance.status not in ('cancelled', 'returned'):
+        return
+
+    from erp.models import Warehouse, WarehouseStock, StockMovement
+
+    warehouse = Warehouse.objects.filter(is_default=True).first()
+    if not warehouse:
+        return
+
+    for item in instance.items.select_related('variant').all():
+        if not item.variant:
+            continue
+
+        ws, _ = WarehouseStock.objects.get_or_create(
+            warehouse=warehouse,
+            variant=item.variant,
+            defaults={'quantity': 0}
+        )
+
+        stock_before = ws.quantity
+        ws.quantity += item.quantity
+        ws.save()
+
+        StockMovement.objects.create(
+            variant=item.variant,
+            warehouse=warehouse,
+            type=StockMovement.Type.RETURN,
+            quantity=item.quantity,
+            stock_before=stock_before,
+            stock_after=ws.quantity,
+            sales_order=instance,
+            reason=f"Order Cancelled/Returned: {instance.order_number}",
+        )

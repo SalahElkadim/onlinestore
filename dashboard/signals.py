@@ -112,7 +112,8 @@ def restock_on_order_cancel_or_return(sender, instance, **kwargs):
     old_status = getattr(instance, '_old_status', None)
 
     # لازم يكون كان confirmed قبل كدا
-    if old_status != 'confirmed':
+    RESTOCKABLE_STATUSES = {'confirmed', 'shipped', 'delivered'}
+    if old_status not in RESTOCKABLE_STATUSES:
         return
 
     # ورجع بس لو اتكنسل أو اترتجع

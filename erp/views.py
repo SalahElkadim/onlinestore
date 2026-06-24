@@ -175,6 +175,15 @@ class SalesOrderListCreateView(ListCreateMixin, APIView):
             qs = qs.filter(payment_status=params['payment_status'])
         if params.get('customer'):
             qs = qs.filter(customer_id=params['customer'])
+
+        search = params.get('search', '').strip()
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(customer_name__icontains=search) |
+                Q(customer_phone__icontains=search) |
+                Q(order_number__icontains=search)
+            )
         return qs
 
 
@@ -720,3 +729,41 @@ class SalesTargetListCreateView(ListCreateMixin, APIView):
 class SalesTargetDetailView(RetrieveUpdateDestroyMixin, APIView):
     read_serializer = SalesTargetSerializer
     queryset_model  = SalesTarget
+
+class SalesRevenueStatsView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
+    def get(self, request):
+        from django.db.models import Sum, Count
+        from django.utils import timezone
+        from datetime import timedelta
+
+        now = timezone.now()
+
+        periods = {
+            'day':       now - timedelta(days=1),
+            'week':      now - timedelta(weeks=1),
+            'month':     now - timedelta(days=30),
+            'quarter':   now - timedelta(days=90),
+            'half_year': now - timedelta(days=180),
+            'nine_months': now - timedelta(days=270),
+            'year':      now - timedelta(days=365),
+        }
+
+        REVENUE_STATUSES = ['confirmed', 'processing', 'shipped', 'delivered']
+
+        result = {}
+        for key, start_date in periods.items():
+            qs = SalesOrder.objects.filter(
+                status__in=REVENUE_STATUSES,
+                created_at__gte=start_date
+            ).aggregate(
+                revenue=Sum('total'),
+                orders=Count('id')
+            )
+            result[key] = {
+                'revenue': qs['revenue'] or 0,
+                'orders':  qs['orders']  or 0,
+            }
+
+        return Response({'success': True, 'data': result})
