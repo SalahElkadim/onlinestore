@@ -24,6 +24,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 import uuid
+from cloudinary.models import CloudinaryField
 
 
 # ──────────────────────────────────────────────────────────
@@ -546,7 +547,7 @@ class Expense(models.Model):
     currency    = models.CharField(max_length=10, default='EGP')
     date        = models.DateField(default=timezone.now)
     description = models.CharField(max_length=500)
-    receipt     = models.ImageField(upload_to='expenses/receipts/', blank=True, null=True)
+    receipt     = CloudinaryField('image', folder='expenses/receipts', blank=True, null=True)  # ← بدل ImageField
     is_recurring = models.BooleanField(default=False)
     created_by  = models.ForeignKey(
         'dashboard.User', on_delete=models.SET_NULL, null=True, related_name='expenses'
