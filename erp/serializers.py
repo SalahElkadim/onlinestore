@@ -310,10 +310,9 @@ class ExpenseCategorySerializer(serializers.ModelSerializer):
         model = ExpenseCategory
         fields = ['id', 'name', 'icon', 'color', 'is_active']
 
-
 class ExpenseSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
-    receipt = serializers.SerializerMethodField()
+
     class Meta:
         model = Expense
         fields = [
@@ -323,12 +322,10 @@ class ExpenseSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_at']
 
-    def get_receipt(self, obj):
-        if obj.receipt:
-            return obj.receipt.url  # secure_url من Cloudinary
-        return None
-        
-
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['receipt'] = instance.receipt.url if instance.receipt else None
+        return rep
 
 class RevenueSerializer(serializers.ModelSerializer):
     class Meta:
