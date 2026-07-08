@@ -323,10 +323,10 @@ class ExpenseSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_at']
 
-        def get_receipt(self, obj):
-            if obj.receipt:
-                return obj.receipt.url  # secure_url من Cloudinary
-            return None
+    def get_receipt(self, obj):
+        if obj.receipt:
+            return obj.receipt.url  # secure_url من Cloudinary
+        return None
         
 
 
