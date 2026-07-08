@@ -313,7 +313,7 @@ class ExpenseCategorySerializer(serializers.ModelSerializer):
 
 class ExpenseSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
-
+    receipt = serializers.SerializerMethodField()
     class Meta:
         model = Expense
         fields = [
@@ -322,7 +322,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             'created_by', 'created_at',
         ]
         read_only_fields = ['created_at']
-        
+
         def get_receipt(self, obj):
             if obj.receipt:
                 return obj.receipt.url  # secure_url من Cloudinary
