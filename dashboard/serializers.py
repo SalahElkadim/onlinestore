@@ -339,7 +339,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Product
         fields = [
-            'id', 'name', 'slug', 'sku',
+            'id', 'name', 'slug', 'sku','description',   
             'price', 'discount_price', 'discount_percentage', 'effective_price',
             'category', 'category_name',
             'status', 'total_stock', 'is_in_stock',
